@@ -1,4 +1,4 @@
-exports.handler = async function(event) {
+exports.handler = async function (event) {
   const GAS_URL = "https://script.google.com/macros/s/AKfycbzYwnjDR3s97mfl7TG3HSxRw1zpfy-N9DVMXsluE2o7COg9pFZq-WcQZQ1MBMQPZfPQpg/exec";
 
   try {
