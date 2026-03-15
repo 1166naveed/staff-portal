@@ -1,4 +1,4 @@
-const API_URL = "/.netlify/functions/api";
+const API_URL = "https://script.google.com/macros/s/AKfycbzYwnjDR3s97mfl7TG3HSxRw1zpfy-N9DVMXsluE2o7COg9pFZq-WcQZQ1MBMQPZfPQpg/exec";
 
 let currentUser = null;
 let currentSalesRows = [];
@@ -14,15 +14,15 @@ function initApp() {
 function bindEvents() {
   const $ = id => document.getElementById(id);
 
-  $("loginBtn").addEventListener("click", doLogin);
-  $("logoutBtn1").addEventListener("click", logout);
-  $("logoutBtn2").addEventListener("click", logout);
-  $("loadSalesBtn").addEventListener("click", loadSales);
-  $("submitSalesBtn").addEventListener("click", openSubmitConfirm);
-  $("refreshAdminBtn").addEventListener("click", loadAdminData);
-  $("applyAdminFilterBtn").addEventListener("click", loadAdminData);
-  $("downloadMonthlyPdfBtn").addEventListener("click", downloadMonthlyPdf);
-  $("openMissingSaleBtn").addEventListener("click", openMissingSaleModal);
+  if ($("loginBtn")) $("loginBtn").addEventListener("click", doLogin);
+  if ($("logoutBtn1")) $("logoutBtn1").addEventListener("click", logout);
+  if ($("logoutBtn2")) $("logoutBtn2").addEventListener("click", logout);
+  if ($("loadSalesBtn")) $("loadSalesBtn").addEventListener("click", loadSales);
+  if ($("submitSalesBtn")) $("submitSalesBtn").addEventListener("click", openSubmitConfirm);
+  if ($("refreshAdminBtn")) $("refreshAdminBtn").addEventListener("click", loadAdminData);
+  if ($("applyAdminFilterBtn")) $("applyAdminFilterBtn").addEventListener("click", loadAdminData);
+  if ($("downloadMonthlyPdfBtn")) $("downloadMonthlyPdfBtn").addEventListener("click", downloadMonthlyPdf);
+  if ($("openMissingSaleBtn")) $("openMissingSaleBtn").addEventListener("click", openMissingSaleModal);
 }
 
 function $(id) {
@@ -48,8 +48,11 @@ function escapeHtml(text) {
 async function apiRequest(payload) {
   const response = await fetch(API_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify(payload),
+    redirect: "follow"
   });
 
   return await response.json();
@@ -77,16 +80,16 @@ function logout() {
   pendingDuplicateOverrideRows = [];
   localStorage.removeItem("staffPortalUser");
 
-  $("loginPage").classList.remove("hidden");
-  $("staffPage").classList.add("hidden");
-  $("adminPage").classList.add("hidden");
-  $("username").value = "";
-  $("password").value = "";
-  $("salesArea").classList.add("hidden");
-  $("salesTableBody").innerHTML = "";
-  $("todayTableBody").innerHTML = "";
-  $("adminTableBody").innerHTML = "";
-  $("missingTableBody").innerHTML = "";
+  if ($("loginPage")) $("loginPage").classList.remove("hidden");
+  if ($("staffPage")) $("staffPage").classList.add("hidden");
+  if ($("adminPage")) $("adminPage").classList.add("hidden");
+  if ($("username")) $("username").value = "";
+  if ($("password")) $("password").value = "";
+  if ($("salesArea")) $("salesArea").classList.add("hidden");
+  if ($("salesTableBody")) $("salesTableBody").innerHTML = "";
+  if ($("todayTableBody")) $("todayTableBody").innerHTML = "";
+  if ($("adminTableBody")) $("adminTableBody").innerHTML = "";
+  if ($("missingTableBody")) $("missingTableBody").innerHTML = "";
 
   showMessage("loginMsg", "");
   showMessage("salesMsg", "");
@@ -128,18 +131,18 @@ async function doLogin() {
 }
 
 function showLoggedInUI() {
-  $("loginPage").classList.add("hidden");
+  if ($("loginPage")) $("loginPage").classList.add("hidden");
 
   if (currentUser.role === "admin") {
-    $("adminPage").classList.remove("hidden");
-    $("staffPage").classList.add("hidden");
-    $("adminWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
+    if ($("adminPage")) $("adminPage").classList.remove("hidden");
+    if ($("staffPage")) $("staffPage").classList.add("hidden");
+    if ($("adminWelcome")) $("adminWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
     loadAdminData();
   } else {
-    $("staffPage").classList.remove("hidden");
-    $("adminPage").classList.add("hidden");
-    $("staffWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
-    $("staffDate").value = getTodayInputDate();
+    if ($("staffPage")) $("staffPage").classList.remove("hidden");
+    if ($("adminPage")) $("adminPage").classList.add("hidden");
+    if ($("staffWelcome")) $("staffWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
+    if ($("staffDate")) $("staffDate").value = getTodayInputDate();
     loadTodaySubmissions();
   }
 }
@@ -225,13 +228,13 @@ async function loadSales() {
 
     if (!res.ok) {
       showMessage("salesMsg", res.message || "Failed to load sales.", "error");
-      $("salesArea").classList.add("hidden");
+      if ($("salesArea")) $("salesArea").classList.add("hidden");
       return;
     }
 
     currentSalesRows = res.rows || [];
     renderSalesTable(currentSalesRows);
-    $("salesArea").classList.remove("hidden");
+    if ($("salesArea")) $("salesArea").classList.remove("hidden");
     showMessage("salesMsg", "");
   } catch {
     showMessage("salesMsg", "Failed to load sales.", "error");
@@ -508,9 +511,9 @@ async function loadAdminSubmissions() {
   try {
     const res = await apiRequest({
       action: "getAdminSubmissions",
-      singleDate: $("adminSingleDate").value,
-      fromDate: $("adminFromDate").value,
-      toDate: $("adminToDate").value
+      singleDate: $("adminSingleDate") ? $("adminSingleDate").value : "",
+      fromDate: $("adminFromDate") ? $("adminFromDate").value : "",
+      toDate: $("adminToDate") ? $("adminToDate").value : ""
     });
 
     if (!res.ok) {
@@ -651,9 +654,9 @@ async function loadMissingRequests() {
   try {
     const res = await apiRequest({
       action: "getMissingRequests",
-      singleDate: $("adminSingleDate").value,
-      fromDate: $("adminFromDate").value,
-      toDate: $("adminToDate").value
+      singleDate: $("adminSingleDate") ? $("adminSingleDate").value : "",
+      fromDate: $("adminFromDate") ? $("adminFromDate").value : "",
+      toDate: $("adminToDate") ? $("adminToDate").value : ""
     });
 
     if (!res.ok) {
