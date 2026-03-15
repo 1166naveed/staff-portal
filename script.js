@@ -2,183 +2,284 @@ const API_URL = "/.netlify/functions/api";
 
 let currentUser = null;
 let currentSalesRows = [];
+let pendingDuplicateOverrideRows = [];
 
-const loginPage = document.getElementById('loginPage');
-const staffPage = document.getElementById('staffPage');
-const adminPage = document.getElementById('adminPage');
-const modalHost = document.getElementById('modalHost');
+document.addEventListener("DOMContentLoaded", initApp);
 
-document.getElementById('loginBtn').addEventListener('click', doLogin);
-document.getElementById('logoutBtn1').addEventListener('click', logout);
-document.getElementById('logoutBtn2').addEventListener('click', logout);
-document.getElementById('loadSalesBtn').addEventListener('click', loadSales);
-document.getElementById('submitSalesBtn').addEventListener('click', openSubmitConfirmation);
-document.getElementById('refreshAdminBtn').addEventListener('click', loadAdminSubmissions);
+function initApp() {
+  bindEvents();
+  restoreSession();
+}
 
-function showMessage(id, text, type = '') {
-  const el = document.getElementById(id);
+function bindEvents() {
+  const $ = id => document.getElementById(id);
+
+  $("loginBtn").addEventListener("click", doLogin);
+  $("logoutBtn1").addEventListener("click", logout);
+  $("logoutBtn2").addEventListener("click", logout);
+  $("loadSalesBtn").addEventListener("click", loadSales);
+  $("submitSalesBtn").addEventListener("click", openSubmitConfirm);
+  $("refreshAdminBtn").addEventListener("click", loadAdminData);
+  $("applyAdminFilterBtn").addEventListener("click", loadAdminData);
+  $("downloadMonthlyPdfBtn").addEventListener("click", downloadMonthlyPdf);
+  $("openMissingSaleBtn").addEventListener("click", openMissingSaleModal);
+}
+
+function $(id) {
+  return document.getElementById(id);
+}
+
+function showMessage(id, text, type = "") {
+  const el = $(id);
+  if (!el) return;
   el.className = `msg ${type}`;
-  el.textContent = text || '';
+  el.textContent = text || "";
 }
 
 function escapeHtml(text) {
-  return String(text == null ? '' : text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return String(text == null ? "" : text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 async function apiRequest(payload) {
   const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
 
   return await response.json();
 }
 
-async function doLogin() {
-  const username = document.getElementById('username').value.trim();
-  const password = document.getElementById('password').value.trim();
+function persistSession(user) {
+  localStorage.setItem("staffPortalUser", JSON.stringify(user));
+}
 
-  showMessage('loginMsg', 'Checking login...');
+function restoreSession() {
+  const saved = localStorage.getItem("staffPortalUser");
+  if (!saved) return;
 
   try {
-    const res = await apiRequest({
-      action: 'login',
-      username,
-      password
-    });
-
-    if (!res.ok) {
-      showMessage('loginMsg', res.message || 'Login failed.', 'error');
-      return;
-    }
-
-    currentUser = res.user;
-    loginPage.classList.add('hidden');
-
-    if (currentUser.role === 'admin') {
-      adminPage.classList.remove('hidden');
-      document.getElementById('adminWelcome').textContent = `Welcome, ${currentUser.staff_name}`;
-      loadAdminSubmissions();
-    } else {
-      staffPage.classList.remove('hidden');
-      document.getElementById('staffWelcome').textContent = `Welcome, ${currentUser.staff_name}`;
-      document.getElementById('staffDate').value = getTodayInputDate();
-      loadTodaySubmissions();
-    }
-  } catch (err) {
-    showMessage('loginMsg', 'Login error.', 'error');
+    currentUser = JSON.parse(saved);
+    showLoggedInUI();
+  } catch {
+    localStorage.removeItem("staffPortalUser");
   }
 }
 
 function logout() {
   currentUser = null;
   currentSalesRows = [];
+  pendingDuplicateOverrideRows = [];
+  localStorage.removeItem("staffPortalUser");
 
-  loginPage.classList.remove('hidden');
-  staffPage.classList.add('hidden');
-  adminPage.classList.add('hidden');
+  $("loginPage").classList.remove("hidden");
+  $("staffPage").classList.add("hidden");
+  $("adminPage").classList.add("hidden");
+  $("username").value = "";
+  $("password").value = "";
+  $("salesArea").classList.add("hidden");
+  $("salesTableBody").innerHTML = "";
+  $("todayTableBody").innerHTML = "";
+  $("adminTableBody").innerHTML = "";
+  $("missingTableBody").innerHTML = "";
 
-  document.getElementById('username').value = '';
-  document.getElementById('password').value = '';
-  document.getElementById('salesArea').classList.add('hidden');
+  showMessage("loginMsg", "");
+  showMessage("salesMsg", "");
+  showMessage("todayMsg", "");
+  showMessage("adminMsg", "");
+  showMessage("missingMsg", "");
+}
 
-  document.getElementById('salesTableBody').innerHTML = '';
-  document.getElementById('todayTableBody').innerHTML = '';
-  document.getElementById('adminTableBody').innerHTML = '';
+async function doLogin() {
+  const username = $("username").value.trim();
+  const password = $("password").value.trim();
 
-  showMessage('loginMsg', '');
-  showMessage('salesMsg', '');
-  showMessage('todayMsg', '');
-  showMessage('adminMsg', '');
+  showMessage("loginMsg", "Checking login...");
+
+  try {
+    const res = await apiRequest({
+      action: "login",
+      username,
+      password
+    });
+
+    if (!res.ok) {
+      showMessage("loginMsg", res.message || "Login failed.", "error");
+      return;
+    }
+
+    currentUser = res.user;
+
+    if (currentUser.temp_password) {
+      openChangePasswordModal();
+      return;
+    }
+
+    persistSession(currentUser);
+    showLoggedInUI();
+  } catch (err) {
+    showMessage("loginMsg", "Connection error.", "error");
+  }
+}
+
+function showLoggedInUI() {
+  $("loginPage").classList.add("hidden");
+
+  if (currentUser.role === "admin") {
+    $("adminPage").classList.remove("hidden");
+    $("staffPage").classList.add("hidden");
+    $("adminWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
+    loadAdminData();
+  } else {
+    $("staffPage").classList.remove("hidden");
+    $("adminPage").classList.add("hidden");
+    $("staffWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
+    $("staffDate").value = getTodayInputDate();
+    loadTodaySubmissions();
+  }
 }
 
 function getTodayInputDate() {
   const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-async function loadSales() {
-  const selectedDate = document.getElementById('staffDate').value;
+function openChangePasswordModal() {
+  openModal(`
+    <h3>Create New Password</h3>
+    <p class="modal-text">Please create your new password before continuing.</p>
+    <div class="form-group">
+      <label>New Password</label>
+      <input type="password" id="newPassword1" placeholder="Enter new password">
+    </div>
+    <div class="form-group">
+      <label>Confirm New Password</label>
+      <input type="password" id="newPassword2" placeholder="Confirm new password">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-light" onclick="closeModal()">Cancel</button>
+      <button onclick="submitPasswordChange()">Save Password</button>
+    </div>
+  `);
+}
 
-  if (!selectedDate) {
-    showMessage('salesMsg', 'Please select a date.', 'error');
+async function submitPasswordChange() {
+  const p1 = $("newPassword1").value.trim();
+  const p2 = $("newPassword2").value.trim();
+
+  if (!p1 || !p2) {
+    alert("Please enter the new password.");
     return;
   }
 
-  showMessage('salesMsg', 'Loading sales...');
+  if (p1 !== p2) {
+    alert("Passwords do not match.");
+    return;
+  }
 
   try {
     const res = await apiRequest({
-      action: 'getSalesByDate',
-      selectedDate
+      action: "changePassword",
+      username: currentUser.username,
+      new_password: p1
     });
 
     if (!res.ok) {
-      showMessage('salesMsg', res.message || 'Failed to load sales.', 'error');
+      alert(res.message || "Password change failed.");
+      return;
+    }
+
+    currentUser.temp_password = false;
+    persistSession(currentUser);
+    closeModal();
+    showLoggedInUI();
+  } catch {
+    alert("Password change failed.");
+  }
+}
+
+async function loadSales() {
+  const date = $("staffDate").value;
+
+  if (!date) {
+    showMessage("salesMsg", "Please select a date.", "error");
+    return;
+  }
+
+  showMessage("salesMsg", "Loading sales...");
+
+  try {
+    const res = await apiRequest({
+      action: "getSales",
+      date,
+      role: currentUser.role
+    });
+
+    if (!res.ok) {
+      showMessage("salesMsg", res.message || "Failed to load sales.", "error");
+      $("salesArea").classList.add("hidden");
       return;
     }
 
     currentSalesRows = res.rows || [];
     renderSalesTable(currentSalesRows);
-    document.getElementById('salesArea').classList.remove('hidden');
-    showMessage('salesMsg', '');
-  } catch (err) {
-    showMessage('salesMsg', 'Failed to load sales.', 'error');
+    $("salesArea").classList.remove("hidden");
+    showMessage("salesMsg", "");
+  } catch {
+    showMessage("salesMsg", "Failed to load sales.", "error");
   }
 }
 
 function renderSalesTable(rows) {
-  const body = document.getElementById('salesTableBody');
-  body.innerHTML = '';
+  const body = $("salesTableBody");
+  body.innerHTML = "";
 
-  document.getElementById('rowsFound').textContent = rows.length;
-  document.getElementById('selectedCount').textContent = '0';
-  document.getElementById('selectedGross').textContent = '0.00';
+  $("rowsFound").textContent = rows.length;
+  $("selectedCount").textContent = "0";
+  $("selectedGross").textContent = "0.00";
 
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="5">No sales found for selected date.</td></tr>';
+    body.innerHTML = `<tr><td colspan="5">No sales found for selected date.</td></tr>`;
     return;
   }
 
   rows.forEach((row, index) => {
-    const tr = document.createElement('tr');
-    if (row.is_submitted) tr.classList.add('submitted-row');
+    const tr = document.createElement("tr");
+    if (row.is_submitted) tr.classList.add("submitted-row");
 
-    const submittedNote = row.is_submitted
+    const note = row.is_submitted
       ? `<span class="small-note">Submitted by ${escapeHtml(row.submitted_by)} on ${escapeHtml(row.submitted_at)}</span>`
-      : '';
+      : "";
 
     tr.innerHTML = `
       <td><input type="checkbox" class="sale-check" data-index="${index}"></td>
-      <td>${escapeHtml(row.file_no)}</td>
-      <td>${escapeHtml(row.patient)}${submittedNote}</td>
+      <td>${escapeHtml(row.file)}</td>
+      <td>${escapeHtml(row.patient)}${note}</td>
       <td>${escapeHtml(row.treatment)}</td>
       <td>AED ${Number(row.gross).toFixed(2)}</td>
     `;
-
     body.appendChild(tr);
   });
 
-  document.querySelectorAll('.sale-check').forEach(chk => {
-    chk.addEventListener('change', updateSelectedSummary);
+  document.querySelectorAll(".sale-check").forEach(chk => {
+    chk.addEventListener("change", updateSelectedSummary);
   });
 }
 
 function getSelectedRows() {
   const selected = [];
-  document.querySelectorAll('.sale-check:checked').forEach(chk => {
-    const index = Number(chk.dataset.index);
-    if (!isNaN(index) && currentSalesRows[index]) {
-      selected.push(currentSalesRows[index]);
+  document.querySelectorAll(".sale-check:checked").forEach(chk => {
+    const idx = Number(chk.dataset.index);
+    if (!isNaN(idx) && currentSalesRows[idx]) {
+      selected.push(currentSalesRows[idx]);
     }
   });
   return selected;
@@ -188,84 +289,90 @@ function updateSelectedSummary() {
   const selected = getSelectedRows();
   const total = selected.reduce((sum, row) => sum + Number(row.gross || 0), 0);
 
-  document.getElementById('selectedCount').textContent = selected.length;
-  document.getElementById('selectedGross').textContent = total.toFixed(2);
+  $("selectedCount").textContent = selected.length;
+  $("selectedGross").textContent = total.toFixed(2);
 }
 
-function openSubmitConfirmation() {
-  const selected = getSelectedRows();
+function openSubmitConfirm() {
+  const rows = getSelectedRows();
 
-  if (!selected.length) {
-    showMessage('salesMsg', 'Please select at least one row.', 'error');
+  if (!rows.length) {
+    showMessage("salesMsg", "Please select at least one row.", "error");
     return;
   }
 
-  const total = selected.reduce((sum, row) => sum + Number(row.gross || 0), 0);
+  const total = rows.reduce((sum, row) => sum + Number(row.gross || 0), 0);
 
   openModal(`
     <h3>Confirm Submission</h3>
-    <p>You selected <strong>${selected.length}</strong> row(s).</p>
-    <p>Total Gross: <strong>AED ${total.toFixed(2)}</strong></p>
-    <p>Are you sure you want to submit these sales?</p>
+    <p class="modal-text">You selected <strong>${rows.length}</strong> row(s).</p>
+    <p class="modal-text">Total Gross: <strong>AED ${total.toFixed(2)}</strong></p>
     <div class="modal-actions">
       <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="submitSelected(false)">Confirm Submit</button>
+      <button onclick="submitSelectedSales(false)">Submit</button>
     </div>
   `);
 }
 
-async function submitSelected(overrideDuplicates) {
+async function submitSelectedSales(allowDuplicate) {
   closeModal();
 
-  const selected = getSelectedRows();
+  const rows = pendingDuplicateOverrideRows.length
+    ? pendingDuplicateOverrideRows
+    : getSelectedRows();
 
-  if (!selected.length) {
-    showMessage('salesMsg', 'Please select at least one row.', 'error');
+  if (!rows.length) {
+    showMessage("salesMsg", "Please select rows first.", "error");
     return;
   }
 
-  showMessage('salesMsg', 'Submitting sales...');
+  showMessage("salesMsg", "Submitting...");
 
   try {
     const res = await apiRequest({
-      action: 'submitSales',
-      staffName: currentUser.staff_name,
-      rows: selected,
-      overrideDuplicates: !!overrideDuplicates
+      action: "submitSales",
+      staff: currentUser.staff_name,
+      role: currentUser.role,
+      date: $("staffDate").value,
+      rows,
+      allowDuplicate
     });
 
     if (!res.ok && res.duplicateWarning) {
-      showDuplicateModal(res.duplicates || []);
+      pendingDuplicateOverrideRows = rows;
+      openDuplicateModal(res.duplicates || []);
       return;
     }
 
     if (!res.ok) {
-      showMessage('salesMsg', res.message || 'Submit failed.', 'error');
+      showMessage("salesMsg", res.message || "Submission failed.", "error");
+      pendingDuplicateOverrideRows = [];
       return;
     }
 
-    showMessage('salesMsg', res.message || 'Submitted successfully.', 'success');
-    loadSales();
-    loadTodaySubmissions();
-  } catch (err) {
-    showMessage('salesMsg', 'Submit failed.', 'error');
+    pendingDuplicateOverrideRows = [];
+    showMessage("salesMsg", res.message || "Submitted successfully.", "success");
+    await loadSales();
+    await loadTodaySubmissions();
+  } catch {
+    showMessage("salesMsg", "Submission failed.", "error");
   }
 }
 
-function showDuplicateModal(duplicates) {
-  let rows = duplicates.map(d => `
+function openDuplicateModal(duplicates) {
+  const rows = duplicates.map(d => `
     <tr>
-      <td>${escapeHtml(d.file_no)}</td>
+      <td>${escapeHtml(d.file)}</td>
       <td>${escapeHtml(d.patient)}</td>
       <td>${escapeHtml(d.submitted_by)}</td>
       <td>${escapeHtml(d.submitted_at)}</td>
     </tr>
-  `).join('');
+  `).join("");
 
   openModal(`
     <h3>Duplicate Warning</h3>
-    <p>Some selected sales were already submitted.</p>
-    <div class="table-wrap">
+    <p class="modal-text">Some selected rows were already submitted.</p>
+    <div class="table-wrap compact-table">
       <table>
         <thead>
           <tr>
@@ -280,197 +387,477 @@ function showDuplicateModal(duplicates) {
     </div>
     <div class="modal-actions">
       <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="submitSelected(true)">Submit Anyway</button>
+      <button onclick="submitSelectedSales(true)">Submit Anyway</button>
     </div>
   `);
 }
 
 async function loadTodaySubmissions() {
-  if (!currentUser || currentUser.role !== 'staff') return;
+  if (!currentUser || currentUser.role !== "staff") return;
 
-  showMessage('todayMsg', 'Loading today submissions...');
+  showMessage("todayMsg", "Loading today's submissions...");
 
   try {
     const res = await apiRequest({
-      action: 'getTodaySubmissions',
-      staffName: currentUser.staff_name
+      action: "todaySubmissions",
+      staff: currentUser.staff_name
     });
 
     if (!res.ok) {
-      showMessage('todayMsg', res.message || 'Failed to load today submissions.', 'error');
+      showMessage("todayMsg", res.message || "Failed to load.", "error");
       return;
     }
 
     renderTodayTable(res.rows || []);
-    showMessage('todayMsg', '');
-  } catch (err) {
-    showMessage('todayMsg', 'Failed to load today submissions.', 'error');
+    showMessage("todayMsg", "");
+  } catch {
+    showMessage("todayMsg", "Failed to load.", "error");
   }
 }
 
 function renderTodayTable(rows) {
-  const body = document.getElementById('todayTableBody');
-  body.innerHTML = '';
+  const body = $("todayTableBody");
+  body.innerHTML = "";
 
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="5">No submissions today.</td></tr>';
+    body.innerHTML = `<tr><td colspan="5">No submissions today.</td></tr>`;
     return;
   }
 
-  rows.forEach(row => {
-    const tr = document.createElement('tr');
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(row.timestamp)}</td>
-      <td>${escapeHtml(row.file_no)}</td>
-      <td>${escapeHtml(row.patient)}</td>
-      <td>${escapeHtml(row.treatment)}</td>
-      <td>AED ${Number(row.gross).toFixed(2)}</td>
+      <td>${escapeHtml(r.time)}</td>
+      <td>${escapeHtml(r.file)}</td>
+      <td>${escapeHtml(r.patient)}</td>
+      <td>${escapeHtml(r.treatment)}</td>
+      <td>AED ${Number(r.gross).toFixed(2)}</td>
     `;
     body.appendChild(tr);
   });
 }
 
-async function loadAdminSubmissions() {
-  showMessage('adminMsg', 'Loading submissions...');
-
-  try {
-    const res = await apiRequest({
-      action: 'getAllSubmissions'
-    });
-
-    if (!res.ok) {
-      showMessage('adminMsg', res.message || 'Failed to load admin submissions.', 'error');
-      return;
-    }
-
-    renderAdminTable(res.rows || []);
-    showMessage('adminMsg', '');
-  } catch (err) {
-    showMessage('adminMsg', 'Failed to load admin submissions.', 'error');
-  }
+function openMissingSaleModal() {
+  openModal(`
+    <h3>Add Missing Sale</h3>
+    <p class="modal-text">This request will go to admin for approval.</p>
+    <div class="form-group">
+      <label>Client File Number</label>
+      <input type="text" id="missingFile" placeholder="Enter file number">
+    </div>
+    <div class="form-group">
+      <label>Date of Payment</label>
+      <input type="date" id="missingDate">
+    </div>
+    <div class="form-group">
+      <label>Treatment</label>
+      <input type="text" id="missingTreatment" placeholder="Enter treatment">
+    </div>
+    <div class="form-group">
+      <label>Gross without VAT</label>
+      <input type="number" id="missingGross" placeholder="Enter amount">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-light" onclick="closeModal()">Cancel</button>
+      <button onclick="submitMissingSale()">Submit Request</button>
+    </div>
+  `);
 }
 
-function renderAdminTable(rows) {
-  const body = document.getElementById('adminTableBody');
-  body.innerHTML = '';
+async function submitMissingSale() {
+  const file = $("missingFile").value.trim();
+  const paymentDate = $("missingDate").value.trim();
+  const treatment = $("missingTreatment").value.trim();
+  const gross = $("missingGross").value.trim();
 
-  if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="8">No submissions found.</td></tr>';
+  if (!file || !paymentDate || !treatment || !gross) {
+    alert("Please complete all fields.");
     return;
   }
 
-  rows.forEach(row => {
-    const tr = document.createElement('tr');
+  try {
+    const res = await apiRequest({
+      action: "addMissingSale",
+      staff: currentUser.staff_name,
+      file,
+      payment_date: paymentDate,
+      treatment,
+      gross
+    });
+
+    if (!res.ok) {
+      alert(res.message || "Could not submit missing sale request.");
+      return;
+    }
+
+    closeModal();
+    alert("Missing sale request sent to admin.");
+  } catch {
+    alert("Could not submit missing sale request.");
+  }
+}
+
+async function loadAdminData() {
+  await loadAdminSubmissions();
+  await loadMissingRequests();
+}
+
+async function loadAdminSubmissions() {
+  showMessage("adminMsg", "Loading submissions...");
+
+  try {
+    const res = await apiRequest({
+      action: "getAdminSubmissions",
+      singleDate: $("adminSingleDate").value,
+      fromDate: $("adminFromDate").value,
+      toDate: $("adminToDate").value
+    });
+
+    if (!res.ok) {
+      showMessage("adminMsg", res.message || "Failed to load submissions.", "error");
+      return;
+    }
+
+    renderAdminSubmissions(res.rows || []);
+    showMessage("adminMsg", "");
+  } catch {
+    showMessage("adminMsg", "Failed to load submissions.", "error");
+  }
+}
+
+function renderAdminSubmissions(rows) {
+  const body = $("adminTableBody");
+  body.innerHTML = "";
+
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="8">No submissions found.</td></tr>`;
+    return;
+  }
+
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(row.timestamp)}</td>
-      <td>${escapeHtml(row.staff_name)}</td>
-      <td>${escapeHtml(row.sale_date)}</td>
-      <td>${escapeHtml(row.file_no)}</td>
-      <td>${escapeHtml(row.patient)}</td>
-      <td>${escapeHtml(row.treatment)}</td>
-      <td>AED ${Number(row.gross).toFixed(2)}</td>
+      <td>${escapeHtml(r.timestamp)}</td>
+      <td>${escapeHtml(r.staff)}</td>
+      <td>${escapeHtml(r.sale_date)}</td>
+      <td>${escapeHtml(r.file)}</td>
+      <td>${escapeHtml(r.patient)}</td>
+      <td>${escapeHtml(r.treatment)}</td>
+      <td>AED ${Number(r.gross).toFixed(2)}</td>
       <td>
-        <button class="btn-secondary" onclick='openEditModal(${JSON.stringify(JSON.stringify(row))})'>Edit</button>
-        <button class="btn-danger" onclick="deleteAdminSubmission(${row.row_number})">Delete</button>
+        <div class="table-actions">
+          <button class="btn-secondary btn-small" onclick='openEditSubmissionModal(${JSON.stringify(JSON.stringify(r))})'>Edit</button>
+          <button class="btn-danger btn-small" onclick='deleteSubmission(${r.row_number})'>Delete</button>
+        </div>
       </td>
     `;
     body.appendChild(tr);
   });
 }
 
-function openEditModal(rowJson) {
+function openEditSubmissionModal(rowJson) {
   const row = JSON.parse(rowJson);
 
   openModal(`
     <h3>Edit Submission</h3>
     <div class="form-group">
       <label>Staff name</label>
-      <input type="text" id="edit_staff_name" value="${escapeHtml(row.staff_name)}">
+      <input type="text" id="editStaff" value="${escapeHtml(row.staff)}">
     </div>
     <div class="form-group">
       <label>Sale date</label>
-      <input type="text" id="edit_sale_date" value="${escapeHtml(row.sale_date)}">
+      <input type="date" id="editSaleDate" value="${escapeHtml(row.sale_date)}">
     </div>
     <div class="form-group">
       <label>File no</label>
-      <input type="text" id="edit_file_no" value="${escapeHtml(row.file_no)}">
+      <input type="text" id="editFile" value="${escapeHtml(row.file)}">
     </div>
     <div class="form-group">
       <label>Patient</label>
-      <input type="text" id="edit_patient" value="${escapeHtml(row.patient)}">
+      <input type="text" id="editPatient" value="${escapeHtml(row.patient)}">
     </div>
     <div class="form-group">
       <label>Mobile</label>
-      <input type="text" id="edit_mobile" value="${escapeHtml(row.mobile)}">
+      <input type="text" id="editMobile" value="${escapeHtml(row.mobile || "")}">
     </div>
     <div class="form-group">
       <label>Treatment</label>
-      <textarea id="edit_treatment">${escapeHtml(row.treatment)}</textarea>
+      <textarea id="editTreatment">${escapeHtml(row.treatment)}</textarea>
     </div>
     <div class="form-group">
       <label>Gross</label>
-      <input type="number" id="edit_gross" value="${Number(row.gross)}">
+      <input type="number" id="editGross" value="${Number(row.gross)}">
     </div>
     <div class="modal-actions">
       <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="saveAdminEdit(${row.row_number})">Save</button>
+      <button onclick="saveSubmissionEdit(${row.row_number})">Save</button>
     </div>
   `);
 }
 
-async function saveAdminEdit(rowNumber) {
+async function saveSubmissionEdit(rowNumber) {
   const record = {
-    staff_name: document.getElementById('edit_staff_name').value.trim(),
-    sale_date: document.getElementById('edit_sale_date').value.trim(),
-    file_no: document.getElementById('edit_file_no').value.trim(),
-    patient: document.getElementById('edit_patient').value.trim(),
-    mobile: document.getElementById('edit_mobile').value.trim(),
-    treatment: document.getElementById('edit_treatment').value.trim(),
-    gross: document.getElementById('edit_gross').value.trim()
+    staff: $("editStaff").value.trim(),
+    sale_date: $("editSaleDate").value.trim(),
+    file: $("editFile").value.trim(),
+    patient: $("editPatient").value.trim(),
+    mobile: $("editMobile").value.trim(),
+    treatment: $("editTreatment").value.trim(),
+    gross: $("editGross").value.trim()
   };
 
   try {
     const res = await apiRequest({
-      action: 'updateSubmission',
-      rowNumber,
+      action: "updateSubmission",
+      row_number: rowNumber,
       record
     });
 
     if (!res.ok) {
-      alert(res.message || 'Update failed.');
+      alert(res.message || "Update failed.");
       return;
     }
 
     closeModal();
     loadAdminSubmissions();
-  } catch (err) {
-    alert('Update failed.');
+  } catch {
+    alert("Update failed.");
   }
 }
 
-async function deleteAdminSubmission(rowNumber) {
-  if (!confirm('Are you sure you want to delete this submission?')) return;
+async function deleteSubmission(rowNumber) {
+  if (!confirm("Delete this submission?")) return;
 
   try {
     const res = await apiRequest({
-      action: 'deleteSubmission',
-      rowNumber
+      action: "deleteSubmission",
+      row_number: rowNumber
     });
 
     if (!res.ok) {
-      alert(res.message || 'Delete failed.');
+      alert(res.message || "Delete failed.");
       return;
     }
 
     loadAdminSubmissions();
-  } catch (err) {
-    alert('Delete failed.');
+  } catch {
+    alert("Delete failed.");
   }
 }
 
+async function loadMissingRequests() {
+  showMessage("missingMsg", "Loading missing sale requests...");
+
+  try {
+    const res = await apiRequest({
+      action: "getMissingRequests",
+      singleDate: $("adminSingleDate").value,
+      fromDate: $("adminFromDate").value,
+      toDate: $("adminToDate").value
+    });
+
+    if (!res.ok) {
+      showMessage("missingMsg", res.message || "Failed to load missing sale requests.", "error");
+      return;
+    }
+
+    renderMissingRequests(res.rows || []);
+    showMessage("missingMsg", "");
+  } catch {
+    showMessage("missingMsg", "Failed to load missing sale requests.", "error");
+  }
+}
+
+function renderMissingRequests(rows) {
+  const body = $("missingTableBody");
+  body.innerHTML = "";
+
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="9">No missing sale requests found.</td></tr>`;
+    return;
+  }
+
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(r.timestamp)}</td>
+      <td>${escapeHtml(r.staff)}</td>
+      <td>${escapeHtml(r.file)}</td>
+      <td>${escapeHtml(r.payment_date)}</td>
+      <td>${escapeHtml(r.treatment)}</td>
+      <td>AED ${Number(r.gross).toFixed(2)}</td>
+      <td>${escapeHtml(r.status)}</td>
+      <td>${escapeHtml(r.note || "")}</td>
+      <td>
+        <div class="table-actions">
+          <button class="btn-secondary btn-small" onclick='approveMissing(${r.row_number})' ${r.status !== "Pending" ? "disabled" : ""}>Approve</button>
+          <button class="btn-danger btn-small" onclick='openRejectMissingModal(${r.row_number})' ${r.status !== "Pending" ? "disabled" : ""}>Reject</button>
+        </div>
+      </td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+async function approveMissing(rowNumber) {
+  if (!confirm("Approve this missing sale?")) return;
+
+  try {
+    const res = await apiRequest({
+      action: "approveMissing",
+      row_number: rowNumber
+    });
+
+    if (!res.ok) {
+      alert(res.message || "Approval failed.");
+      return;
+    }
+
+    loadMissingRequests();
+  } catch {
+    alert("Approval failed.");
+  }
+}
+
+function openRejectMissingModal(rowNumber) {
+  openModal(`
+    <h3>Reject Missing Sale</h3>
+    <div class="form-group">
+      <label>Rejection Reason</label>
+      <textarea id="rejectReason" placeholder="Enter rejection reason"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-light" onclick="closeModal()">Cancel</button>
+      <button class="btn-danger" onclick="submitRejectMissing(${rowNumber})">Reject</button>
+    </div>
+  `);
+}
+
+async function submitRejectMissing(rowNumber) {
+  const note = $("rejectReason").value.trim();
+
+  try {
+    const res = await apiRequest({
+      action: "rejectMissing",
+      row_number: rowNumber,
+      note
+    });
+
+    if (!res.ok) {
+      alert(res.message || "Rejection failed.");
+      return;
+    }
+
+    closeModal();
+    loadMissingRequests();
+  } catch {
+    alert("Rejection failed.");
+  }
+}
+
+async function downloadMonthlyPdf() {
+  try {
+    const res = await apiRequest({
+      action: "getMonthlyReport",
+      staff: currentUser.staff_name
+    });
+
+    if (!res.ok) {
+      alert(res.message || "Could not generate report.");
+      return;
+    }
+
+    if (!res.rows || !res.rows.length) {
+      alert("No records found for the current month.");
+      return;
+    }
+
+    const logoData = await loadLogoAsPngDataUrl("assets/logo.svg");
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF("p", "pt", "a4");
+
+    if (logoData) {
+      doc.addImage(logoData, "PNG", 40, 30, 120, 40);
+    }
+
+    doc.setFontSize(18);
+    doc.text("Monthly Submission Report", 40, 95);
+
+    doc.setFontSize(11);
+    doc.text(`Staff: ${currentUser.staff_name}`, 40, 115);
+    doc.text(`Month: ${res.month}`, 40, 132);
+    doc.text(`Total Gross: AED ${Number(res.total_gross || 0).toFixed(2)}`, 40, 149);
+
+    const tableBody = res.rows.map(r => [
+      r.type,
+      r.date,
+      r.file,
+      r.patient || "-",
+      r.treatment,
+      `AED ${Number(r.gross).toFixed(2)}`,
+      r.timestamp
+    ]);
+
+    doc.autoTable({
+      startY: 170,
+      head: [[
+        "Type",
+        "Date",
+        "File no",
+        "Patient",
+        "Treatment",
+        "Gross",
+        "Recorded"
+      ]],
+      body: tableBody,
+      styles: {
+        fontSize: 9,
+        cellPadding: 5
+      },
+      headStyles: {
+        fillColor: [184, 155, 94]
+      }
+    });
+
+    doc.save(`monthly-report-${currentUser.staff_name}-${res.month}.pdf`);
+  } catch {
+    alert("Could not generate PDF.");
+  }
+}
+
+function loadLogoAsPngDataUrl(path) {
+  return fetch(path)
+    .then(r => r.text())
+    .then(svgText => {
+      return new Promise(resolve => {
+        const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+        const img = new Image();
+
+        img.onload = function () {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width || 400;
+          canvas.height = img.height || 120;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+          resolve(canvas.toDataURL("image/png"));
+        };
+
+        img.onerror = function () {
+          resolve(null);
+        };
+
+        img.src = url;
+      });
+    })
+    .catch(() => null);
+}
+
 function openModal(html) {
-  modalHost.classList.remove('hidden');
-  modalHost.innerHTML = `
+  $("modalHost").classList.remove("hidden");
+  $("modalHost").innerHTML = `
     <div class="modal-backdrop">
       <div class="modal">
         ${html}
@@ -480,12 +867,17 @@ function openModal(html) {
 }
 
 function closeModal() {
-  modalHost.classList.add('hidden');
-  modalHost.innerHTML = '';
+  $("modalHost").classList.add("hidden");
+  $("modalHost").innerHTML = "";
 }
 
 window.closeModal = closeModal;
-window.submitSelected = submitSelected;
-window.openEditModal = openEditModal;
-window.deleteAdminSubmission = deleteAdminSubmission;
-window.saveAdminEdit = saveAdminEdit;
+window.submitSelectedSales = submitSelectedSales;
+window.submitPasswordChange = submitPasswordChange;
+window.openEditSubmissionModal = openEditSubmissionModal;
+window.saveSubmissionEdit = saveSubmissionEdit;
+window.deleteSubmission = deleteSubmission;
+window.approveMissing = approveMissing;
+window.openRejectMissingModal = openRejectMissingModal;
+window.submitRejectMissing = submitRejectMissing;
+window.submitMissingSale = submitMissingSale;
