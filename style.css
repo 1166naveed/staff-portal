@@ -6,21 +6,20 @@
 body {
   margin: 0;
   font-family: "Segoe UI", Arial, sans-serif;
-  background:
-    radial-gradient(circle at top left, #f7f1e3 0%, #f3f4f6 35%, #eef1f5 100%);
+  background: radial-gradient(circle at top left, #f7f1e3 0%, #f3f4f6 35%, #eef1f5 100%);
   color: #1f2937;
   min-height: 100vh;
 }
 
 .container {
-  max-width: 1180px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 24px 16px 40px;
 }
 
 .card {
   background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(184, 155, 94, 0.15);
+  border: 1px solid rgba(184, 155, 94, 0.16);
   border-radius: 20px;
   padding: 24px;
   box-shadow: 0 10px 30px rgba(17, 24, 39, 0.08);
@@ -32,10 +31,9 @@ body {
   display: none !important;
 }
 
-/* Login page */
-#loginPage {
+.login-card {
   max-width: 520px;
-  margin: 50px auto 0;
+  margin: 48px auto 0;
   padding: 34px 28px 28px;
 }
 
@@ -55,22 +53,20 @@ h2, h3 {
   color: #111827;
 }
 
-#loginPage h2 {
+.login-card h2 {
   text-align: center;
   font-size: 30px;
   font-weight: 700;
   margin-bottom: 8px;
 }
 
+.centered {
+  text-align: center;
+}
+
 .muted {
   color: #6b7280;
   font-size: 14px;
-}
-
-#loginPage .muted {
-  text-align: center;
-  margin-bottom: 22px;
-  font-size: 15px;
 }
 
 .form-group {
@@ -136,8 +132,10 @@ button:active {
 }
 
 button:disabled {
-  opacity: 0.65;
+  opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-light {
@@ -160,11 +158,27 @@ button:disabled {
   box-shadow: none;
 }
 
-/* Layout */
+.btn-small {
+  width: auto;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
 .row {
   display: grid;
-  grid-template-columns: 1fr;
   gap: 14px;
+}
+
+.two-col {
+  grid-template-columns: 1fr;
+}
+
+.three-col {
+  grid-template-columns: 1fr;
+}
+
+.action-align {
+  align-self: end;
 }
 
 .topbar {
@@ -216,7 +230,7 @@ button:disabled {
 
 .header-actions button {
   width: auto;
-  min-width: 120px;
+  min-width: 130px;
 }
 
 .section-divider {
@@ -227,10 +241,6 @@ button:disabled {
 
 .section-head {
   margin-bottom: 12px;
-}
-
-.admin-toolbar {
-  margin-bottom: 8px;
 }
 
 .summary-grid {
@@ -262,7 +272,25 @@ button:disabled {
   color: #111827;
 }
 
-/* Tables */
+.filter-card {
+  background: #fcfbf8;
+  border: 1px solid rgba(184, 155, 94, 0.14);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.toolbar-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbar-row button {
+  width: auto;
+  min-width: 140px;
+}
+
 .table-wrap {
   overflow-x: auto;
   overflow-y: auto;
@@ -272,6 +300,10 @@ button:disabled {
   border-radius: 16px;
   background: #fff;
   margin-top: 14px;
+}
+
+.compact-table {
+  margin-top: 0;
 }
 
 table {
@@ -316,6 +348,12 @@ tr.submitted-row {
   line-height: 1.4;
 }
 
+.table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .msg {
   margin-top: 10px;
   font-size: 14px;
@@ -338,7 +376,6 @@ tr.submitted-row {
   margin-top: 14px;
 }
 
-/* Modal */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -353,7 +390,7 @@ tr.submitted-row {
 .modal {
   background: #fff;
   width: 100%;
-  max-width: 560px;
+  max-width: 580px;
   border-radius: 20px;
   padding: 22px;
   max-height: 90vh;
@@ -365,6 +402,12 @@ tr.submitted-row {
   margin-bottom: 12px;
 }
 
+.modal-text {
+  margin: 0 0 10px;
+  color: #4b5563;
+  font-size: 14px;
+}
+
 .modal-actions {
   display: flex;
   flex-direction: column;
@@ -373,18 +416,21 @@ tr.submitted-row {
 }
 
 textarea {
-  min-height: 90px;
+  min-height: 100px;
   resize: vertical;
 }
 
-/* Responsive */
 @media (min-width: 768px) {
   .container {
     padding: 28px 20px 50px;
   }
 
-  .row {
+  .two-col {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .three-col {
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .topbar {
@@ -404,7 +450,7 @@ textarea {
 }
 
 @media (max-width: 767px) {
-  #loginPage {
+  .login-card {
     margin-top: 20px;
     padding: 26px 18px 22px;
   }
@@ -413,7 +459,7 @@ textarea {
     max-width: 220px;
   }
 
-  #loginPage h2 {
+  .login-card h2 {
     font-size: 25px;
   }
 
@@ -430,6 +476,6 @@ textarea {
   }
 
   table {
-    min-width: 680px;
+    min-width: 700px;
   }
 }
