@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Commission Submission</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+
+    <section id="loginPage" class="card">
+      <h2>Staff Commission Submission</h2>
+      <p class="muted">Login with your username and password</p>
+
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Enter username">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter password">
+      </div>
+
+      <button id="loginBtn">Login</button>
+      <div id="loginMsg" class="msg"></div>
+    </section>
+
+    <section id="staffPage" class="hidden">
+      <div class="card">
+        <div class="topbar">
+          <div>
+            <h2>Staff Dashboard</h2>
+            <p class="muted" id="staffWelcome"></p>
+          </div>
+          <button class="btn-light" id="logoutBtn1">Logout</button>
+        </div>
+
+        <div class="row">
+          <div class="form-group">
+            <label for="staffDate">Select Date</label>
+            <input type="date" id="staffDate">
+          </div>
+          <div class="form-group">
+            <label>&nbsp;</label>
+            <button id="loadSalesBtn">Load Sales</button>
+          </div>
+        </div>
+
+        <div id="salesMsg" class="msg"></div>
+
+        <div id="salesArea" class="hidden">
+          <div class="summary">
+            <div><strong>Rows found:</strong> <span id="rowsFound">0</span></div>
+            <div><strong>Selected rows:</strong> <span id="selectedCount">0</span></div>
+            <div><strong>Selected gross:</strong> AED <span id="selectedGross">0.00</span></div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>File no</th>
+                  <th>Patient</th>
+                  <th>Treatment</th>
+                  <th>Gross</th>
+                </tr>
+              </thead>
+              <tbody id="salesTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="sticky-submit">
+            <button id="submitSalesBtn">Submit Selected Sales</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Today's Submitted Rows</h3>
+        <div id="todayMsg" class="msg"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>File no</th>
+                <th>Patient</th>
+                <th>Treatment</th>
+                <th>Gross</th>
+              </tr>
+            </thead>
+            <tbody id="todayTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="adminPage" class="hidden">
+      <div class="card">
+        <div class="topbar">
+          <div>
+            <h2>Admin Dashboard</h2>
+            <p class="muted" id="adminWelcome"></p>
+          </div>
+          <button class="btn-light" id="logoutBtn2">Logout</button>
+        </div>
+
+        <button id="refreshAdminBtn">Refresh</button>
+        <div id="adminMsg" class="msg"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Staff</th>
+                <th>Sale date</th>
+                <th>File no</th>
+                <th>Patient</th>
+                <th>Treatment</th>
+                <th>Gross</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div id="modalHost" class="hidden"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
