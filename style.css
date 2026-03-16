@@ -475,7 +475,103 @@ textarea {
     width: 100%;
   }
 
-  table {
-    min-width: 700px;
+  .table-wrap {
+    overflow: visible;
+    border: none;
+    background: transparent;
+    margin-top: 14px;
+  }
+
+  .responsive-stack-table {
+    min-width: 100%;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .responsive-stack-table thead {
+    display: none;
+  }
+
+  .responsive-stack-table,
+  .responsive-stack-table tbody,
+  .responsive-stack-table tr,
+  .responsive-stack-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .responsive-stack-table tr {
+    background: #fff;
+    border: 1px solid #ebe7de;
+    border-radius: 16px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 14px rgba(17, 24, 39, 0.05);
+  }
+
+  .responsive-stack-table tr.submitted-row {
+    background: #fff8e8;
+  }
+
+  .responsive-stack-table td {
+    border: none;
+    padding: 7px 0;
+    font-size: 14px;
+    text-align: left;
+    word-break: break-word;
+  }
+
+  .responsive-stack-table td::before {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #8a6f37;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 3px;
+  }
+
+  /* Sales table labels */
+  .sales-table tbody td:nth-child(1)::before { content: "Select"; }
+  .sales-table tbody td:nth-child(2)::before { content: "File no"; }
+  .sales-table tbody td:nth-child(3)::before { content: "Patient"; }
+  .sales-table tbody td:nth-child(4)::before { content: "Treatment"; }
+  .sales-table tbody td:nth-child(5)::before { content: "Gross"; }
+
+  /* Today's submissions labels */
+  .today-table tbody td:nth-child(1)::before { content: "Time"; }
+  .today-table tbody td:nth-child(2)::before { content: "File no"; }
+  .today-table tbody td:nth-child(3)::before { content: "Patient"; }
+  .today-table tbody td:nth-child(4)::before { content: "Treatment"; }
+  .today-table tbody td:nth-child(5)::before { content: "Gross"; }
+
+  /* Admin submissions labels */
+  .admin-table tbody td:nth-child(1)::before { content: "Time"; }
+  .admin-table tbody td:nth-child(2)::before { content: "Staff"; }
+  .admin-table tbody td:nth-child(3)::before { content: "Sale date"; }
+  .admin-table tbody td:nth-child(4)::before { content: "File no"; }
+  .admin-table tbody td:nth-child(5)::before { content: "Patient"; }
+  .admin-table tbody td:nth-child(6)::before { content: "Treatment"; }
+  .admin-table tbody td:nth-child(7)::before { content: "Gross"; }
+  .admin-table tbody td:nth-child(8)::before { content: "Actions"; }
+
+  /* Missing sale labels */
+  .missing-table tbody td:nth-child(1)::before { content: "Requested"; }
+  .missing-table tbody td:nth-child(2)::before { content: "Staff"; }
+  .missing-table tbody td:nth-child(3)::before { content: "File no"; }
+  .missing-table tbody td:nth-child(4)::before { content: "Payment date"; }
+  .missing-table tbody td:nth-child(5)::before { content: "Treatment"; }
+  .missing-table tbody td:nth-child(6)::before { content: "Gross"; }
+  .missing-table tbody td:nth-child(7)::before { content: "Status"; }
+  .missing-table tbody td:nth-child(8)::before { content: "Admin note"; }
+  .missing-table tbody td:nth-child(9)::before { content: "Actions"; }
+
+  .responsive-stack-table td .table-actions {
+    margin-top: 4px;
+  }
+
+  .responsive-stack-table td .table-actions button {
+    width: auto;
   }
 }
