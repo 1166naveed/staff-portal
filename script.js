@@ -263,11 +263,11 @@ function renderSalesTable(rows) {
       : "";
 
     tr.innerHTML = `
-      <td><input type="checkbox" class="sale-check" data-index="${index}"></td>
-      <td>${escapeHtml(row.file)}</td>
-      <td>${escapeHtml(row.patient)}${note}</td>
-      <td>${escapeHtml(row.treatment)}</td>
-      <td>AED ${Number(row.gross).toFixed(2)}</td>
+      <td data-label="Select"><input type="checkbox" class="sale-check" data-index="${index}"></td>
+      <td data-label="File no">${escapeHtml(row.file)}</td>
+      <td data-label="Patient">${escapeHtml(row.patient)}${note}</td>
+      <td data-label="Treatment">${escapeHtml(row.treatment)}</td>
+      <td data-label="Gross">AED ${Number(row.gross).toFixed(2)}</td>
     `;
     body.appendChild(tr);
   });
@@ -365,9 +365,19 @@ async function submitSelectedSales(allowDuplicate) {
 function openDuplicateModal(duplicates) {
   const rows = duplicates.map(d => `
     <tr>
+      <td>File no</td>
       <td>${escapeHtml(d.file)}</td>
+    </tr>
+    <tr>
+      <td>Patient</td>
       <td>${escapeHtml(d.patient)}</td>
+    </tr>
+    <tr>
+      <td>Submitted by</td>
       <td>${escapeHtml(d.submitted_by)}</td>
+    </tr>
+    <tr>
+      <td>Time</td>
       <td>${escapeHtml(d.submitted_at)}</td>
     </tr>
   `).join("");
@@ -377,14 +387,6 @@ function openDuplicateModal(duplicates) {
     <p class="modal-text">Some selected rows were already submitted.</p>
     <div class="table-wrap compact-table">
       <table>
-        <thead>
-          <tr>
-            <th>File no</th>
-            <th>Patient</th>
-            <th>Submitted by</th>
-            <th>Time</th>
-          </tr>
-        </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -430,11 +432,11 @@ function renderTodayTable(rows) {
   rows.forEach(r => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(r.time)}</td>
-      <td>${escapeHtml(r.file)}</td>
-      <td>${escapeHtml(r.patient)}</td>
-      <td>${escapeHtml(r.treatment)}</td>
-      <td>AED ${Number(r.gross).toFixed(2)}</td>
+      <td data-label="Time">${escapeHtml(r.time)}</td>
+      <td data-label="File no">${escapeHtml(r.file)}</td>
+      <td data-label="Patient">${escapeHtml(r.patient)}</td>
+      <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
+      <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
     `;
     body.appendChild(tr);
   });
@@ -540,14 +542,14 @@ function renderAdminSubmissions(rows) {
   rows.forEach(r => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(r.timestamp)}</td>
-      <td>${escapeHtml(r.staff)}</td>
-      <td>${escapeHtml(r.sale_date)}</td>
-      <td>${escapeHtml(r.file)}</td>
-      <td>${escapeHtml(r.patient)}</td>
-      <td>${escapeHtml(r.treatment)}</td>
-      <td>AED ${Number(r.gross).toFixed(2)}</td>
-      <td>
+      <td data-label="Time">${escapeHtml(r.timestamp)}</td>
+      <td data-label="Staff">${escapeHtml(r.staff)}</td>
+      <td data-label="Sale date">${escapeHtml(r.sale_date)}</td>
+      <td data-label="File no">${escapeHtml(r.file)}</td>
+      <td data-label="Patient">${escapeHtml(r.patient)}</td>
+      <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
+      <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
+      <td data-label="Actions">
         <div class="table-actions">
           <button class="btn-secondary btn-small" onclick='openEditSubmissionModal(${JSON.stringify(JSON.stringify(r))})'>Edit</button>
           <button class="btn-danger btn-small" onclick='deleteSubmission(${r.row_number})'>Delete</button>
@@ -683,15 +685,15 @@ function renderMissingRequests(rows) {
   rows.forEach(r => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(r.timestamp)}</td>
-      <td>${escapeHtml(r.staff)}</td>
-      <td>${escapeHtml(r.file)}</td>
-      <td>${escapeHtml(r.payment_date)}</td>
-      <td>${escapeHtml(r.treatment)}</td>
-      <td>AED ${Number(r.gross).toFixed(2)}</td>
-      <td>${escapeHtml(r.status)}</td>
-      <td>${escapeHtml(r.note || "")}</td>
-      <td>
+      <td data-label="Requested">${escapeHtml(r.timestamp)}</td>
+      <td data-label="Staff">${escapeHtml(r.staff)}</td>
+      <td data-label="File no">${escapeHtml(r.file)}</td>
+      <td data-label="Payment date">${escapeHtml(r.payment_date)}</td>
+      <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
+      <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
+      <td data-label="Status">${escapeHtml(r.status)}</td>
+      <td data-label="Admin note">${escapeHtml(r.note || "")}</td>
+      <td data-label="Actions">
         <div class="table-actions">
           <button class="btn-secondary btn-small" onclick='approveMissing(${r.row_number})' ${r.status !== "Pending" ? "disabled" : ""}>Approve</button>
           <button class="btn-danger btn-small" onclick='openRejectMissingModal(${r.row_number})' ${r.status !== "Pending" ? "disabled" : ""}>Reject</button>
