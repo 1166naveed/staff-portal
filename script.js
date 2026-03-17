@@ -259,7 +259,7 @@ function renderSalesTable(rows) {
     if (row.is_submitted) tr.classList.add("submitted-row");
 
     const note = row.is_submitted
-      ? `<span class="small-note">Submitted by ${escapeHtml(row.submitted_by)} on ${escapeHtml(row.submitted_at)}</span>`
+      ? `<span class="small-note">Submitted by ${escapeHtml(row.submitted_by)}</span>`
       : "";
 
     tr.innerHTML = `
