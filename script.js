@@ -23,6 +23,10 @@ function bindEvents() {
   if ($("applyAdminFilterBtn")) $("applyAdminFilterBtn").addEventListener("click", loadAdminData);
   if ($("downloadMonthlyPdfBtn")) $("downloadMonthlyPdfBtn").addEventListener("click", downloadMonthlyPdf);
   if ($("openMissingSaleBtn")) $("openMissingSaleBtn").addEventListener("click", openMissingSaleModal);
+
+  if ($("createTaskBtn")) $("createTaskBtn").addEventListener("click", createTask);
+  if ($("refreshTasksBtn")) $("refreshTasksBtn").addEventListener("click", loadTasks);
+  if ($("applyTaskFilterBtn")) $("applyTaskFilterBtn").addEventListener("click", loadTasks);
 }
 
 function $(id) {
@@ -90,12 +94,14 @@ function logout() {
   if ($("todayTableBody")) $("todayTableBody").innerHTML = "";
   if ($("adminTableBody")) $("adminTableBody").innerHTML = "";
   if ($("missingTableBody")) $("missingTableBody").innerHTML = "";
+  if ($("taskTableBody")) $("taskTableBody").innerHTML = "";
 
   showMessage("loginMsg", "");
   showMessage("salesMsg", "");
   showMessage("todayMsg", "");
   showMessage("adminMsg", "");
   showMessage("missingMsg", "");
+  showMessage("taskMsg", "");
 }
 
 async function doLogin() {
@@ -505,6 +511,7 @@ async function submitMissingSale() {
 async function loadAdminData() {
   await loadAdminSubmissions();
   await loadMissingRequests();
+  await loadTasks();
 }
 
 async function loadAdminSubmissions() {
@@ -760,6 +767,135 @@ async function submitRejectMissing(rowNumber) {
   }
 }
 
+async function loadTasks() {
+  showMessage("taskMsg", "Loading tasks...");
+
+  try {
+    const assignedValue = $("taskAssignedFilter") ? $("taskAssignedFilter").value.trim() : "";
+
+    const res = await apiRequest({
+      action: "getTasks",
+      status: $("taskStatusFilter") ? $("taskStatusFilter").value : "All",
+      branch: $("taskBranchFilter") ? $("taskBranchFilter").value : "All",
+      assigned_to: assignedValue || "All"
+    });
+
+    if (!res.ok) {
+      showMessage("taskMsg", res.message || "Failed to load tasks.", "error");
+      return;
+    }
+
+    renderTasks(res.rows || []);
+    showMessage("taskMsg", "");
+  } catch {
+    showMessage("taskMsg", "Failed to load tasks.", "error");
+  }
+}
+
+function renderTasks(rows) {
+  const body = $("taskTableBody");
+  if (!body) return;
+
+  body.innerHTML = "";
+
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="8">No tasks found.</td></tr>`;
+    return;
+  }
+
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td data-label="Created">${escapeHtml(r.timestamp)}</td>
+      <td data-label="Title">
+        <strong>${escapeHtml(r.title)}</strong><br>
+        <span class="small-note">${escapeHtml(r.description || "")}</span>
+      </td>
+      <td data-label="Assigned To">${escapeHtml(r.assigned_to)}</td>
+      <td data-label="Branch">${escapeHtml(r.branch)}</td>
+      <td data-label="Priority">${escapeHtml(r.priority)}</td>
+      <td data-label="Due Date">${escapeHtml(r.due_date)}</td>
+      <td data-label="Status">${escapeHtml(r.status)}</td>
+      <td data-label="Actions">
+        <div class="table-actions">
+          <button class="btn-secondary btn-small" onclick='updateTaskStatus(${r.row_number}, "In Progress")'>Start</button>
+          <button class="btn-light btn-small" onclick='updateTaskStatus(${r.row_number}, "Completed")'>Done</button>
+          <button class="btn-danger btn-small" onclick='updateTaskStatus(${r.row_number}, "Cancelled")'>Cancel</button>
+        </div>
+      </td>
+    `;
+
+    body.appendChild(tr);
+  });
+}
+
+async function createTask() {
+  const title = $("taskTitle") ? $("taskTitle").value.trim() : "";
+  const description = $("taskDesc") ? $("taskDesc").value.trim() : "";
+  const assignedTo = $("taskAssign") ? $("taskAssign").value.trim() : "";
+  const branch = $("taskBranch") ? $("taskBranch").value : "";
+  const priority = $("taskPriority") ? $("taskPriority").value : "";
+  const dueDate = $("taskDue") ? $("taskDue").value : "";
+
+  if (!title || !assignedTo || !branch || !priority || !dueDate) {
+    showMessage("taskMsg", "Please complete all task fields.", "error");
+    return;
+  }
+
+  showMessage("taskMsg", "Creating task...");
+
+  try {
+    const res = await apiRequest({
+      action: "addTask",
+      title,
+      description,
+      assigned_to: assignedTo,
+      created_by: currentUser.staff_name,
+      branch,
+      priority,
+      due_date: dueDate
+    });
+
+    if (!res.ok) {
+      showMessage("taskMsg", res.message || "Failed to create task.", "error");
+      return;
+    }
+
+    if ($("taskTitle")) $("taskTitle").value = "";
+    if ($("taskDesc")) $("taskDesc").value = "";
+    if ($("taskAssign")) $("taskAssign").value = "";
+    if ($("taskBranch")) $("taskBranch").value = "Jumeirah";
+    if ($("taskPriority")) $("taskPriority").value = "Low";
+    if ($("taskDue")) $("taskDue").value = "";
+
+    showMessage("taskMsg", res.message || "Task created successfully.", "success");
+    await loadTasks();
+  } catch {
+    showMessage("taskMsg", "Failed to create task.", "error");
+  }
+}
+
+async function updateTaskStatus(rowNumber, status) {
+  try {
+    const res = await apiRequest({
+      action: "updateTaskStatus",
+      row_number: rowNumber,
+      status
+    });
+
+    if (!res.ok) {
+      showMessage("taskMsg", res.message || "Failed to update task.", "error");
+      return;
+    }
+
+    showMessage("taskMsg", "Task updated successfully.", "success");
+    await loadTasks();
+  } catch {
+    showMessage("taskMsg", "Failed to update task.", "error");
+  }
+}
+
 async function downloadMonthlyPdf() {
   try {
     const res = await apiRequest({
@@ -886,3 +1022,4 @@ window.approveMissing = approveMissing;
 window.openRejectMissingModal = openRejectMissingModal;
 window.submitRejectMissing = submitRejectMissing;
 window.submitMissingSale = submitMissingSale;
+window.updateTaskStatus = updateTaskStatus;
