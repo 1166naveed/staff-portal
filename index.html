@@ -229,6 +229,116 @@
           </table>
         </div>
       </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h3>Admin Tasks</h3>
+          <p class="muted">Create, assign, and track internal clinic tasks</p>
+        </div>
+
+        <div class="filter-card">
+          <div class="row two-col">
+            <div class="form-group">
+              <label for="taskTitle">Task Title</label>
+              <input type="text" id="taskTitle" placeholder="Enter task title">
+            </div>
+
+            <div class="form-group">
+              <label for="taskAssign">Assign To</label>
+              <input type="text" id="taskAssign" placeholder="Enter staff/admin name">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="taskDesc">Description</label>
+            <textarea id="taskDesc" placeholder="Enter task description"></textarea>
+          </div>
+
+          <div class="row three-col">
+            <div class="form-group">
+              <label for="taskBranch">Branch</label>
+              <select id="taskBranch">
+                <option value="Jumeirah">Jumeirah</option>
+                <option value="Al Barsha">Al Barsha</option>
+                <option value="All">All</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskPriority">Priority</label>
+              <select id="taskPriority">
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Urgent">Urgent</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskDue">Due Date</label>
+              <input type="date" id="taskDue">
+            </div>
+          </div>
+
+          <div class="toolbar-row">
+            <button id="createTaskBtn">Create Task</button>
+            <button class="btn-light" id="refreshTasksBtn">Refresh Tasks</button>
+          </div>
+        </div>
+
+        <div class="filter-card">
+          <div class="row three-col">
+            <div class="form-group">
+              <label for="taskStatusFilter">Status Filter</label>
+              <select id="taskStatusFilter">
+                <option value="All">All</option>
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskBranchFilter">Branch Filter</label>
+              <select id="taskBranchFilter">
+                <option value="All">All</option>
+                <option value="Jumeirah">Jumeirah</option>
+                <option value="Al Barsha">Al Barsha</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskAssignedFilter">Assigned To</label>
+              <input type="text" id="taskAssignedFilter" placeholder="Filter by assigned name">
+            </div>
+          </div>
+
+          <div class="toolbar-row">
+            <button id="applyTaskFilterBtn">Apply Task Filter</button>
+          </div>
+        </div>
+
+        <div id="taskMsg" class="msg"></div>
+
+        <div class="table-wrap task-table-wrap">
+          <table class="responsive-stack-table task-table">
+            <thead>
+              <tr>
+                <th style="width: 150px;">Created</th>
+                <th>Title</th>
+                <th style="width: 140px;">Assigned To</th>
+                <th style="width: 120px;">Branch</th>
+                <th style="width: 110px;">Priority</th>
+                <th style="width: 120px;">Due Date</th>
+                <th style="width: 120px;">Status</th>
+                <th style="width: 180px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="taskTableBody"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
   </div>
