@@ -3,11 +3,14 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzYwnjDR3s97mfl7TG3HSxR
 let currentUser = null;
 let currentSalesRows = [];
 let pendingDuplicateOverrideRows = [];
+let activeStaffNames = [];
 
 document.addEventListener("DOMContentLoaded", initApp);
 
 function initApp() {
   bindEvents();
+  initTaskAutocomplete();
+  loadActiveStaff();
   restoreSession();
 }
 
@@ -60,6 +63,240 @@ async function apiRequest(payload) {
   });
 
   return await response.json();
+}
+
+
+async function loadActiveStaff() {
+  try {
+    const res = await apiRequest({ action: "getActiveStaff" });
+    if (res.ok) {
+      activeStaffNames = Array.isArray(res.names) ? res.names : [];
+    }
+  } catch (err) {
+    console.log("Failed to load active staff", err);
+  }
+}
+
+function findExactActiveStaffName(value) {
+  const cleanValue = String(value || "").trim().toLowerCase();
+  if (!cleanValue) return "";
+  return activeStaffNames.find(name => name.toLowerCase() === cleanValue) || "";
+}
+
+function filterActiveStaffNames(value) {
+  const cleanValue = String(value || "").trim().toLowerCase();
+  if (!cleanValue) return [...activeStaffNames];
+  return activeStaffNames.filter(name => name.toLowerCase().includes(cleanValue));
+}
+
+function initAutocompleteField(config) {
+  const input = $(config.inputId);
+  const hidden = $(config.hiddenId);
+  const suggestions = $(config.suggestionsId);
+  const error = $(config.errorId);
+
+  if (!input || !hidden || !suggestions || !error) return;
+
+  let activeIndex = -1;
+  let filteredList = [];
+
+  function clearError() {
+    input.classList.remove("invalid");
+    error.classList.add("hidden");
+  }
+
+  function showError() {
+    input.classList.add("invalid");
+    error.classList.remove("hidden");
+  }
+
+  function hideSuggestions() {
+    suggestions.classList.add("hidden");
+    suggestions.innerHTML = "";
+    activeIndex = -1;
+  }
+
+  function renderSuggestions(list) {
+    filteredList = list;
+
+    if (!list.length) {
+      hideSuggestions();
+      return;
+    }
+
+    suggestions.innerHTML = list.map((name, index) => `
+      <div class="autocomplete-item" data-index="${index}" data-name="${escapeHtml(name)}">${escapeHtml(name)}</div>
+    `).join("");
+
+    suggestions.classList.remove("hidden");
+  }
+
+  function selectName(name) {
+    input.value = name;
+    hidden.value = name;
+    clearError();
+    hideSuggestions();
+    if (typeof config.onSelect === "function") config.onSelect(name);
+  }
+
+  function validate() {
+    const exact = findExactActiveStaffName(input.value);
+
+    if (exact) {
+      hidden.value = exact;
+      clearError();
+      hideSuggestions();
+      return true;
+    }
+
+    hidden.value = "";
+    if (String(input.value || "").trim()) {
+      showError();
+    } else {
+      clearError();
+    }
+    return false;
+  }
+
+  input.addEventListener("input", function () {
+    hidden.value = "";
+    clearError();
+
+    const exact = findExactActiveStaffName(this.value);
+    if (exact) {
+      selectName(exact);
+      return;
+    }
+
+    renderSuggestions(filterActiveStaffNames(this.value));
+  });
+
+  input.addEventListener("focus", function () {
+    const exact = findExactActiveStaffName(this.value);
+    if (exact) {
+      hidden.value = exact;
+      hideSuggestions();
+      return;
+    }
+
+    renderSuggestions(filterActiveStaffNames(this.value));
+  });
+
+  input.addEventListener("blur", function () {
+    setTimeout(() => {
+      validate();
+      hideSuggestions();
+    }, 120);
+  });
+
+  input.addEventListener("keydown", function (e) {
+    const items = suggestions.querySelectorAll(".autocomplete-item");
+    if (!items.length) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      activeIndex = (activeIndex + 1) % items.length;
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      activeIndex = (activeIndex - 1 + items.length) % items.length;
+    } else if (e.key === "Enter") {
+      const exact = findExactActiveStaffName(input.value);
+      if (exact) {
+        e.preventDefault();
+        selectName(exact);
+        return;
+      }
+
+      if (activeIndex >= 0 && items[activeIndex]) {
+        e.preventDefault();
+        selectName(items[activeIndex].dataset.name);
+      }
+      return;
+    } else {
+      return;
+    }
+
+    items.forEach(item => item.classList.remove("active"));
+    if (items[activeIndex]) items[activeIndex].classList.add("active");
+  });
+
+  suggestions.addEventListener("mousedown", function (e) {
+    const item = e.target.closest(".autocomplete-item");
+    if (!item) return;
+    selectName(item.dataset.name);
+  });
+
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest(`#${config.wrapId}`) && !e.target.closest(`.${config.wrapClass || "autocomplete-wrap"}`)) {
+      hideSuggestions();
+    }
+  });
+
+  config.validate = validate;
+}
+
+let validateTaskAssignSelection = () => true;
+let validateTaskAssignedFilterSelection = () => true;
+
+function initTaskAutocomplete() {
+  initAutocompleteField({
+    inputId: "taskAssign",
+    hiddenId: "taskAssignValue",
+    suggestionsId: "taskAssignSuggestions",
+    errorId: "taskAssignError"
+  });
+
+  initAutocompleteField({
+    inputId: "taskAssignedFilter",
+    hiddenId: "taskAssignedValue",
+    suggestionsId: "taskAssignedSuggestions",
+    errorId: "taskAssignedError"
+  });
+
+  const assignInput = $("taskAssign");
+  const filterInput = $("taskAssignedFilter");
+  const assignHidden = $("taskAssignValue");
+  const filterHidden = $("taskAssignedValue");
+
+  validateTaskAssignSelection = function () {
+    if (!assignInput || !assignHidden) return true;
+    const exact = findExactActiveStaffName(assignInput.value);
+    if (exact) {
+      assignHidden.value = exact;
+      assignInput.classList.remove("invalid");
+      if ($("taskAssignError")) $("taskAssignError").classList.add("hidden");
+      return true;
+    }
+    if (String(assignInput.value || "").trim()) {
+      assignInput.classList.add("invalid");
+      if ($("taskAssignError")) $("taskAssignError").classList.remove("hidden");
+      assignHidden.value = "";
+      return false;
+    }
+    return true;
+  };
+
+  validateTaskAssignedFilterSelection = function () {
+    if (!filterInput || !filterHidden) return true;
+    const raw = String(filterInput.value || "").trim();
+    if (!raw) {
+      filterHidden.value = "";
+      filterInput.classList.remove("invalid");
+      if ($("taskAssignedError")) $("taskAssignedError").classList.add("hidden");
+      return true;
+    }
+    const exact = findExactActiveStaffName(raw);
+    if (exact) {
+      filterHidden.value = exact;
+      filterInput.classList.remove("invalid");
+      if ($("taskAssignedError")) $("taskAssignedError").classList.add("hidden");
+      return true;
+    }
+    filterInput.classList.add("invalid");
+    if ($("taskAssignedError")) $("taskAssignedError").classList.remove("hidden");
+    filterHidden.value = "";
+    return false;
+  };
 }
 
 function persistSession(user) {
@@ -771,7 +1008,12 @@ async function loadTasks() {
   showMessage("taskMsg", "Loading tasks...");
 
   try {
-    const assignedValue = $("taskAssignedFilter") ? $("taskAssignedFilter").value.trim() : "";
+    if (!validateTaskAssignedFilterSelection()) {
+      showMessage("taskMsg", "Please select a valid assigned staff name for filtering, or clear the field.", "error");
+      return;
+    }
+
+    const assignedValue = $("taskAssignedValue") ? $("taskAssignedValue").value.trim() : "";
 
     const res = await apiRequest({
       action: "getTasks",
@@ -833,7 +1075,13 @@ function renderTasks(rows) {
 async function createTask() {
   const title = $("taskTitle") ? $("taskTitle").value.trim() : "";
   const description = $("taskDesc") ? $("taskDesc").value.trim() : "";
-  const assignedTo = $("taskAssign") ? $("taskAssign").value.trim() : "";
+
+  if (!validateTaskAssignSelection()) {
+    showMessage("taskMsg", "Please select a valid active staff name.", "error");
+    return;
+  }
+
+  const assignedTo = $("taskAssignValue") ? $("taskAssignValue").value.trim() : "";
   const branch = $("taskBranch") ? $("taskBranch").value : "";
   const priority = $("taskPriority") ? $("taskPriority").value : "";
   const dueDate = $("taskDue") ? $("taskDue").value : "";
@@ -865,6 +1113,7 @@ async function createTask() {
     if ($("taskTitle")) $("taskTitle").value = "";
     if ($("taskDesc")) $("taskDesc").value = "";
     if ($("taskAssign")) $("taskAssign").value = "";
+    if ($("taskAssignValue")) $("taskAssignValue").value = "";
     if ($("taskBranch")) $("taskBranch").value = "Jumeirah";
     if ($("taskPriority")) $("taskPriority").value = "Low";
     if ($("taskDue")) $("taskDue").value = "";
