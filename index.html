@@ -245,7 +245,12 @@
 
             <div class="form-group">
               <label for="taskAssign">Assign To</label>
-              <input type="text" id="taskAssign" placeholder="Enter staff/admin name">
+              <div class="autocomplete-wrap">
+                <input type="text" id="taskAssign" placeholder="Search active staff" autocomplete="off">
+                <input type="hidden" id="taskAssignValue">
+                <div id="taskAssignSuggestions" class="autocomplete-list hidden"></div>
+                <div id="taskAssignError" class="field-error hidden">Select a valid active staff name</div>
+              </div>
             </div>
           </div>
 
@@ -310,7 +315,12 @@
 
             <div class="form-group">
               <label for="taskAssignedFilter">Assigned To</label>
-              <input type="text" id="taskAssignedFilter" placeholder="Filter by assigned name">
+              <div class="autocomplete-wrap">
+                <input type="text" id="taskAssignedFilter" placeholder="Search assigned staff" autocomplete="off">
+                <input type="hidden" id="taskAssignedValue">
+                <div id="taskAssignedSuggestions" class="autocomplete-list hidden"></div>
+                <div id="taskAssignedError" class="field-error hidden">Select a valid staff name</div>
+              </div>
             </div>
           </div>
 
