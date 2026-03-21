@@ -1086,78 +1086,96 @@ function renderTasks(rows) {
 }
 
 async function createTask() {
-  const title = $("taskTitle") ? $("taskTitle").value.trim() : "";
-  const description = $("taskDesc") ? $("taskDesc").value.trim() : "";
+  const title = $("taskTitle").value.trim();
+  const description = $("taskDesc").value.trim();
+  const branch = $("taskBranch").value;
+  const priority = $("taskPriority").value;
+  const dueDate = $("taskDue").value;
 
-  if (!validateTaskAssignSelection()) {
-    showMessage("taskMsg", "Please select a valid active staff name.", "error");
+  if (!title || !branch || !priority || !dueDate) {
+    showMessage("taskMsg", "Please complete all fields.", "error");
     return;
   }
-
-  const assignedTo = $("taskAssignValue") ? $("taskAssignValue").value.trim() : "";
-  const branch = $("taskBranch") ? $("taskBranch").value : "";
-  const priority = $("taskPriority") ? $("taskPriority").value : "";
-  const dueDate = $("taskDue") ? $("taskDue").value : "";
-
-  if (!title || !assignedTo || !branch || !priority || !dueDate) {
-    showMessage("taskMsg", "Please complete all task fields.", "error");
-    return;
-  }
-
-  showMessage("taskMsg", "Creating task...");
 
   try {
-    const res = await apiRequest({
-      action: "addTask",
-      title,
-      description,
-      assigned_to: assignedTo,
-      created_by: currentUser.staff_name,
-      branch,
-      priority,
-      due_date: dueDate
+    const response = await fetch(`${API_URL}/Tasks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: title,
+        description: description,
+        assignedTo: 1,   // temporary
+        createdBy: 1,    // temporary
+        branch: branch,
+        priority: priority,
+        dueDate: dueDate,
+        notes: ""
+      })
     });
 
+    const res = await response.json();
+
     if (!res.ok) {
-      showMessage("taskMsg", res.message || "Failed to create task.", "error");
+      showMessage("taskMsg", res.message, "error");
       return;
     }
 
-    if ($("taskTitle")) $("taskTitle").value = "";
-    if ($("taskDesc")) $("taskDesc").value = "";
-    if ($("taskAssign")) $("taskAssign").value = "";
-    if ($("taskAssignValue")) $("taskAssignValue").value = "";
-    if ($("taskBranch")) $("taskBranch").value = "Jumeirah";
-    if ($("taskPriority")) $("taskPriority").value = "Low";
-    if ($("taskDue")) $("taskDue").value = "";
+    showMessage("taskMsg", "Task created successfully.", "success");
+    loadTasks();
 
-    showMessage("taskMsg", res.message || "Task created successfully.", "success");
-    await loadTasks();
-  } catch {
+  } catch (err) {
+    console.error(err);
     showMessage("taskMsg", "Failed to create task.", "error");
   }
 }
 
-async function updateTaskStatus(rowNumber, status) {
+async function createTask() {
+  const title = $("taskTitle").value.trim();
+  const description = $("taskDesc").value.trim();
+  const branch = $("taskBranch").value;
+  const priority = $("taskPriority").value;
+  const dueDate = $("taskDue").value;
+
+  if (!title || !branch || !priority || !dueDate) {
+    showMessage("taskMsg", "Please complete all fields.", "error");
+    return;
+  }
+
   try {
-    const res = await apiRequest({
-      action: "updateTaskStatus",
-      row_number: rowNumber,
-      status
+    const response = await fetch(`${API_URL}/Tasks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: title,
+        description: description,
+        assignedTo: 1,   // temporary
+        createdBy: 1,    // temporary
+        branch: branch,
+        priority: priority,
+        dueDate: dueDate,
+        notes: ""
+      })
     });
 
+    const res = await response.json();
+
     if (!res.ok) {
-      showMessage("taskMsg", res.message || "Failed to update task.", "error");
+      showMessage("taskMsg", res.message, "error");
       return;
     }
 
-    showMessage("taskMsg", "Task updated successfully.", "success");
-    await loadTasks();
-  } catch {
-    showMessage("taskMsg", "Failed to update task.", "error");
+    showMessage("taskMsg", "Task created successfully.", "success");
+    loadTasks();
+
+  } catch (err) {
+    console.error(err);
+    showMessage("taskMsg", "Failed to create task.", "error");
   }
 }
-
 async function downloadMonthlyPdf() {
   try {
     const res = await apiRequest({
