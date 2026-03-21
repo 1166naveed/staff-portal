@@ -1,3 +1,5 @@
+console.log("SCRIPT LOADED SUCCESSFULLY");
+
 const API_URL = "https://api.bionixstaff.com/api";
 
 let currentUser = null;
