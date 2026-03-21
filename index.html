@@ -131,6 +131,34 @@
           </table>
         </div>
       </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h3>My Tasks</h3>
+          <p class="muted">Tasks assigned to you</p>
+        </div>
+
+        <div id="myTaskAlertBoxWrap"></div>
+        <div id="myTaskSummaryCards" class="summary-grid"></div>
+        <div id="myTaskMsg" class="msg"></div>
+
+        <div class="table-wrap task-table-wrap">
+          <table class="responsive-stack-table task-table my-task-table">
+            <thead>
+              <tr>
+                <th style="width: 150px;">Created</th>
+                <th>Title</th>
+                <th style="width: 120px;">Branch</th>
+                <th style="width: 110px;">Priority</th>
+                <th style="width: 120px;">Due Date</th>
+                <th style="width: 120px;">Status</th>
+                <th style="width: 180px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="myTaskTableBody"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <section id="adminPage" class="hidden">
@@ -297,10 +325,12 @@
               <label for="taskStatusFilter">Status Filter</label>
               <select id="taskStatusFilter">
                 <option value="All">All</option>
-                <option value="Pending">Pending</option>
+                <option value="New">New</option>
                 <option value="In Progress">In Progress</option>
+                <option value="Waiting">Waiting</option>
                 <option value="Completed">Completed</option>
                 <option value="Cancelled">Cancelled</option>
+                <option value="Overdue">Overdue</option>
               </select>
             </div>
 
@@ -324,11 +354,20 @@
             </div>
           </div>
 
+          <div class="task-search-wrap">
+            <div class="form-group">
+              <label for="taskSearchInput">Search</label>
+              <input type="text" id="taskSearchInput" placeholder="Search title, assigned, branch, priority, status">
+            </div>
+          </div>
+
           <div class="toolbar-row">
             <button id="applyTaskFilterBtn">Apply Task Filter</button>
           </div>
         </div>
 
+        <div id="taskAlertBoxWrap"></div>
+        <div id="taskSummaryCards" class="summary-grid"></div>
         <div id="taskMsg" class="msg"></div>
 
         <div class="table-wrap task-table-wrap">
@@ -342,7 +381,7 @@
                 <th style="width: 110px;">Priority</th>
                 <th style="width: 120px;">Due Date</th>
                 <th style="width: 120px;">Status</th>
-                <th style="width: 180px;">Actions</th>
+                <th style="width: 200px;">Actions</th>
               </tr>
             </thead>
             <tbody id="taskTableBody"></tbody>
@@ -355,6 +394,6 @@
 
   <div id="modalHost" class="hidden"></div>
 
-  <script src="script.js"></script>
+  <script src="script.js?v=3"></script>
 </body>
 </html>
