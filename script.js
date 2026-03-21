@@ -1,1396 +1,399 @@
-console.log("SCRIPT LOADED SUCCESSFULLY");
-
-const API_URL = "https://api.bionixstaff.com/api";
-
-let currentUser = null;
-let currentSalesRows = [];
-let pendingDuplicateOverrideRows = [];
-let activeStaffList = [];
-let activeStaffNames = [];
-
-function $(id) {
-  return document.getElementById(id);
-}
-
-function logout() {
-  currentUser = null;
-  currentSalesRows = [];
-  pendingDuplicateOverrideRows = [];
-  localStorage.removeItem("staffPortalUser");
-
-  if ($("loginPage")) $("loginPage").classList.remove("hidden");
-  if ($("staffPage")) $("staffPage").classList.add("hidden");
-  if ($("adminPage")) $("adminPage").classList.add("hidden");
-  if ($("username")) $("username").value = "";
-  if ($("password")) $("password").value = "";
-  if ($("salesArea")) $("salesArea").classList.add("hidden");
-  if ($("salesTableBody")) $("salesTableBody").innerHTML = "";
-  if ($("todayTableBody")) $("todayTableBody").innerHTML = "";
-  if ($("adminTableBody")) $("adminTableBody").innerHTML = "";
-  if ($("missingTableBody")) $("missingTableBody").innerHTML = "";
-  if ($("taskTableBody")) $("taskTableBody").innerHTML = "";
-
-  showMessage("loginMsg", "");
-  showMessage("salesMsg", "");
-  showMessage("todayMsg", "");
-  showMessage("adminMsg", "");
-  showMessage("missingMsg", "");
-  showMessage("taskMsg", "");
-}
-
-document.addEventListener("DOMContentLoaded", initApp);
-
-function initApp() {
-  bindEvents();
-  initTaskAutocomplete();
-  loadActiveStaff();
-  restoreSession();
-}
-
-function bindEvents() {
-  if ($("loginBtn")) $("loginBtn").addEventListener("click", doLogin);
-  if ($("logoutBtn1")) $("logoutBtn1").addEventListener("click", logout);
-  if ($("logoutBtn2")) $("logoutBtn2").addEventListener("click", logout);
-  if ($("loadSalesBtn")) $("loadSalesBtn").addEventListener("click", loadSales);
-  if ($("submitSalesBtn")) $("submitSalesBtn").addEventListener("click", openSubmitConfirm);
-  if ($("refreshAdminBtn")) $("refreshAdminBtn").addEventListener("click", loadAdminData);
-  if ($("applyAdminFilterBtn")) $("applyAdminFilterBtn").addEventListener("click", loadAdminData);
-  if ($("downloadMonthlyPdfBtn")) $("downloadMonthlyPdfBtn").addEventListener("click", downloadMonthlyPdf);
-  if ($("openMissingSaleBtn")) $("openMissingSaleBtn").addEventListener("click", openMissingSaleModal);
-
-  if ($("createTaskBtn")) $("createTaskBtn").addEventListener("click", createTask);
-  if ($("refreshTasksBtn")) $("refreshTasksBtn").addEventListener("click", loadTasks);
-  if ($("applyTaskFilterBtn")) $("applyTaskFilterBtn").addEventListener("click", loadTasks);
-}
-
-function showMessage(id, text, type = "") {
-  const el = $(id);
-  if (!el) return;
-  el.className = `msg ${type}`;
-  el.textContent = text || "";
-}
-
-function escapeHtml(text) {
-  return String(text == null ? "" : text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-async function apiRequest(payload) {
-  const response = await fetch("https://script.google.com/macros/s/AKfycbzYwnjDR3s97mfl7TG3HSxRw1zpfy-N9DVMXsluE2o7COg9pFZq-WcQZQ1MBMQPZfPQpg/exec", {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify(payload),
-    redirect: "follow"
-  });
-
-  return await response.json();
-}
-
-async function loadActiveStaff() {
-  try {
-    const response = await fetch(`${API_URL}/Staff/active`);
-    const res = await response.json();
-
-    if (Array.isArray(res)) {
-      activeStaffList = res.map(x => ({
-        id: x.id,
-        staffName: x.staffName,
-        role: x.role
-      }));
-
-      activeStaffNames = activeStaffList
-        .map(x => x.staffName)
-        .filter(Boolean);
-
-      return;
-    }
-
-    activeStaffList = [];
-    activeStaffNames = [];
-  } catch (err) {
-    console.log("Failed to load active staff", err);
-    activeStaffList = [];
-    activeStaffNames = [];
-  }
-}
-
-function findActiveStaffByName(name) {
-  const clean = String(name || "").trim().toLowerCase();
-  if (!clean) return null;
-
-  return activeStaffList.find(x => String(x.staffName || "").trim().toLowerCase() === clean) || null;
-}
-
-function findCurrentUserStaffId() {
-  if (currentUser && currentUser.id) return currentUser.id;
-  if (!currentUser || !currentUser.staff_name) return null;
-
-  const match = findActiveStaffByName(currentUser.staff_name);
-  return match ? match.id : null;
-}
-
-function findExactActiveStaffName(value) {
-  const cleanValue = String(value || "").trim().toLowerCase();
-  if (!cleanValue) return "";
-  return activeStaffNames.find(name => name.toLowerCase() === cleanValue) || "";
-}
-
-function filterActiveStaffNames(value) {
-  const cleanValue = String(value || "").trim().toLowerCase();
-  if (!cleanValue) return [...activeStaffNames];
-  return activeStaffNames.filter(name => name.toLowerCase().includes(cleanValue));
-}
-
-function initAutocompleteField(config) {
-  const input = $(config.inputId);
-  const hidden = $(config.hiddenId);
-  const suggestions = $(config.suggestionsId);
-  const error = $(config.errorId);
-
-  if (!input || !hidden || !suggestions || !error) return;
-
-  let activeIndex = -1;
-
-  function clearError() {
-    input.classList.remove("invalid");
-    error.classList.add("hidden");
-  }
-
-  function showError() {
-    input.classList.add("invalid");
-    error.classList.remove("hidden");
-  }
-
-  function hideSuggestions() {
-    suggestions.classList.add("hidden");
-    suggestions.innerHTML = "";
-    activeIndex = -1;
-  }
-
-  function renderSuggestions(list) {
-    if (!list.length) {
-      hideSuggestions();
-      return;
-    }
-
-    suggestions.innerHTML = list.map((name, index) => `
-      <div class="autocomplete-item" data-index="${index}" data-name="${escapeHtml(name)}">${escapeHtml(name)}</div>
-    `).join("");
-
-    suggestions.classList.remove("hidden");
-  }
-
-  function selectName(name) {
-    input.value = name;
-    hidden.value = name;
-    clearError();
-    hideSuggestions();
-    if (typeof config.onSelect === "function") config.onSelect(name);
-  }
-
-  function validate() {
-    const exact = findExactActiveStaffName(input.value);
-
-    if (exact) {
-      hidden.value = exact;
-      clearError();
-      hideSuggestions();
-      return true;
-    }
-
-    hidden.value = "";
-    if (String(input.value || "").trim()) {
-      showError();
-    } else {
-      clearError();
-    }
-    return false;
-  }
-
-  input.addEventListener("input", function () {
-    hidden.value = "";
-    clearError();
-
-    const exact = findExactActiveStaffName(this.value);
-    if (exact) {
-      selectName(exact);
-      return;
-    }
-
-    renderSuggestions(filterActiveStaffNames(this.value));
-  });
-
-  input.addEventListener("focus", function () {
-    const exact = findExactActiveStaffName(this.value);
-    if (exact) {
-      hidden.value = exact;
-      hideSuggestions();
-      return;
-    }
-
-    renderSuggestions(filterActiveStaffNames(this.value));
-  });
-
-  input.addEventListener("blur", function () {
-    setTimeout(() => {
-      validate();
-      hideSuggestions();
-    }, 120);
-  });
-
-  input.addEventListener("keydown", function (e) {
-    const items = suggestions.querySelectorAll(".autocomplete-item");
-    if (!items.length) return;
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      activeIndex = (activeIndex + 1) % items.length;
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      activeIndex = (activeIndex - 1 + items.length) % items.length;
-    } else if (e.key === "Enter") {
-      const exact = findExactActiveStaffName(input.value);
-      if (exact) {
-        e.preventDefault();
-        selectName(exact);
-        return;
-      }
-
-      if (activeIndex >= 0 && items[activeIndex]) {
-        e.preventDefault();
-        selectName(items[activeIndex].dataset.name);
-      }
-      return;
-    } else {
-      return;
-    }
-
-    items.forEach(item => item.classList.remove("active"));
-    if (items[activeIndex]) items[activeIndex].classList.add("active");
-  });
-
-  suggestions.addEventListener("mousedown", function (e) {
-    const item = e.target.closest(".autocomplete-item");
-    if (!item) return;
-    selectName(item.dataset.name);
-  });
-
-  document.addEventListener("click", function (e) {
-    if (!e.target.closest(`#${config.wrapId}`) && !e.target.closest(`.${config.wrapClass || "autocomplete-wrap"}`)) {
-      hideSuggestions();
-    }
-  });
-
-  config.validate = validate;
-}
-
-let validateTaskAssignSelection = () => true;
-let validateTaskAssignedFilterSelection = () => true;
-
-function initTaskAutocomplete() {
-  initAutocompleteField({
-    inputId: "taskAssign",
-    hiddenId: "taskAssignValue",
-    suggestionsId: "taskAssignSuggestions",
-    errorId: "taskAssignError"
-  });
-
-  initAutocompleteField({
-    inputId: "taskAssignedFilter",
-    hiddenId: "taskAssignedValue",
-    suggestionsId: "taskAssignedSuggestions",
-    errorId: "taskAssignedError"
-  });
-
-  const assignInput = $("taskAssign");
-  const filterInput = $("taskAssignedFilter");
-  const assignHidden = $("taskAssignValue");
-  const filterHidden = $("taskAssignedValue");
-
-  validateTaskAssignSelection = function () {
-    if (!assignInput || !assignHidden) return true;
-    const exact = findExactActiveStaffName(assignInput.value);
-    if (exact) {
-      assignHidden.value = exact;
-      assignInput.classList.remove("invalid");
-      if ($("taskAssignError")) $("taskAssignError").classList.add("hidden");
-      return true;
-    }
-    if (String(assignInput.value || "").trim()) {
-      assignInput.classList.add("invalid");
-      if ($("taskAssignError")) $("taskAssignError").classList.remove("hidden");
-      assignHidden.value = "";
-      return false;
-    }
-    return true;
-  };
-
-  validateTaskAssignedFilterSelection = function () {
-    if (!filterInput || !filterHidden) return true;
-    const raw = String(filterInput.value || "").trim();
-    if (!raw) {
-      filterHidden.value = "";
-      filterInput.classList.remove("invalid");
-      if ($("taskAssignedError")) $("taskAssignedError").classList.add("hidden");
-      return true;
-    }
-    const exact = findExactActiveStaffName(raw);
-    if (exact) {
-      filterHidden.value = exact;
-      filterInput.classList.remove("invalid");
-      if ($("taskAssignedError")) $("taskAssignedError").classList.add("hidden");
-      return true;
-    }
-    filterInput.classList.add("invalid");
-    if ($("taskAssignedError")) $("taskAssignedError").classList.remove("hidden");
-    filterHidden.value = "";
-    return false;
-  };
-}
-
-function persistSession(user) {
-  localStorage.setItem("staffPortalUser", JSON.stringify(user));
-}
-
-function restoreSession() {
-  const saved = localStorage.getItem("staffPortalUser");
-  if (!saved) return;
-
-  try {
-    currentUser = JSON.parse(saved);
-    showLoggedInUI();
-  } catch {
-    localStorage.removeItem("staffPortalUser");
-  }
-}
-
-async function doLogin() {
-  const username = $("username").value.trim();
-  const password = $("password").value.trim();
-
-  showMessage("loginMsg", "Checking login...");
-
-  try {
-    const response = await fetch(`${API_URL}/Auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        username: username,
-        password: password
-      })
-    });
-
-    const res = await response.json();
-
-    if (!res.ok) {
-      showMessage("loginMsg", res.message || "Login failed.", "error");
-      return;
-    }
-
-    currentUser = {
-      id: res.user.id,
-      username: res.user.username,
-      staff_name: res.user.staffName,
-      role: String(res.user.role || "").toLowerCase(),
-      temp_password: !!res.user.tempPassword
-    };
-
-    if (currentUser.temp_password) {
-      openChangePasswordModal();
-      return;
-    }
-
-    persistSession(currentUser);
-    showLoggedInUI();
-  } catch (err) {
-    console.error(err);
-    showMessage("loginMsg", "Connection error.", "error");
-  }
-}
-
-function showLoggedInUI() {
-  if ($("loginPage")) $("loginPage").classList.add("hidden");
-
-  if (currentUser.role === "admin") {
-    if ($("adminPage")) $("adminPage").classList.remove("hidden");
-    if ($("staffPage")) $("staffPage").classList.add("hidden");
-    if ($("adminWelcome")) $("adminWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
-    loadAdminData();
-  } else {
-    if ($("staffPage")) $("staffPage").classList.remove("hidden");
-    if ($("adminPage")) $("adminPage").classList.add("hidden");
-    if ($("staffWelcome")) $("staffWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
-    if ($("staffDate")) $("staffDate").value = getTodayInputDate();
-    loadTodaySubmissions();
-  }
-}
-
-function getTodayInputDate() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function openChangePasswordModal() {
-  openModal(`
-    <h3>Create New Password</h3>
-    <p class="modal-text">Please create your new password before continuing.</p>
-    <div class="form-group">
-      <label>New Password</label>
-      <input type="password" id="newPassword1" placeholder="Enter new password">
-    </div>
-    <div class="form-group">
-      <label>Confirm New Password</label>
-      <input type="password" id="newPassword2" placeholder="Confirm new password">
-    </div>
-    <div class="modal-actions">
-      <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="submitPasswordChange()">Save Password</button>
-    </div>
-  `);
-}
-
-async function submitPasswordChange() {
-  const p1 = $("newPassword1").value.trim();
-  const p2 = $("newPassword2").value.trim();
-
-  if (!p1 || !p2) {
-    alert("Please enter the new password.");
-    return;
-  }
-
-  if (p1 !== p2) {
-    alert("Passwords do not match.");
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_URL}/Auth/change-password`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        username: currentUser.username,
-        newPassword: p1
-      })
-    });
-
-    const res = await response.json();
-
-    if (!res.ok) {
-      alert(res.message || "Password change failed.");
-      return;
-    }
-
-    currentUser.temp_password = false;
-    persistSession(currentUser);
-    closeModal();
-    showLoggedInUI();
-  } catch (err) {
-    console.error(err);
-    alert("Password change failed.");
-  }
-}
-
-async function loadSales() {
-  const date = $("staffDate").value;
-
-  if (!date) {
-    showMessage("salesMsg", "Please select a date.", "error");
-    return;
-  }
-
-  showMessage("salesMsg", "Loading sales...");
-
-  try {
-    const res = await apiRequest({
-      action: "getSales",
-      date,
-      role: currentUser.role
-    });
-
-    if (!res.ok) {
-      showMessage("salesMsg", res.message || "Failed to load sales.", "error");
-      if ($("salesArea")) $("salesArea").classList.add("hidden");
-      return;
-    }
-
-    currentSalesRows = res.rows || [];
-    renderSalesTable(currentSalesRows);
-    if ($("salesArea")) $("salesArea").classList.remove("hidden");
-    showMessage("salesMsg", "");
-  } catch {
-    showMessage("salesMsg", "Failed to load sales.", "error");
-  }
-}
-
-function renderSalesTable(rows) {
-  const body = $("salesTableBody");
-  body.innerHTML = "";
-
-  $("rowsFound").textContent = rows.length;
-  $("selectedCount").textContent = "0";
-  $("selectedGross").textContent = "0.00";
-
-  if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="5">No sales found for selected date.</td></tr>`;
-    return;
-  }
-
-  rows.forEach((row, index) => {
-    const tr = document.createElement("tr");
-    if (row.is_submitted) tr.classList.add("submitted-row");
-
-    const note = row.is_submitted
-      ? `<span class="small-note">Submitted by ${escapeHtml(row.submitted_by)}</span>`
-      : "";
-
-    tr.innerHTML = `
-      <td data-label="Select"><input type="checkbox" class="sale-check" data-index="${index}"></td>
-      <td data-label="File no">${escapeHtml(row.file)}</td>
-      <td data-label="Patient">${escapeHtml(row.patient)}${note}</td>
-      <td data-label="Treatment">${escapeHtml(row.treatment)}</td>
-      <td data-label="Gross">AED ${Number(row.gross).toFixed(2)}</td>
-    `;
-    body.appendChild(tr);
-  });
-
-  document.querySelectorAll(".sale-check").forEach(chk => {
-    chk.addEventListener("change", updateSelectedSummary);
-  });
-}
-
-function getSelectedRows() {
-  const selected = [];
-  document.querySelectorAll(".sale-check:checked").forEach(chk => {
-    const idx = Number(chk.dataset.index);
-    if (!isNaN(idx) && currentSalesRows[idx]) {
-      selected.push(currentSalesRows[idx]);
-    }
-  });
-  return selected;
-}
-
-function updateSelectedSummary() {
-  const selected = getSelectedRows();
-  const total = selected.reduce((sum, row) => sum + Number(row.gross || 0), 0);
-
-  $("selectedCount").textContent = selected.length;
-  $("selectedGross").textContent = total.toFixed(2);
-}
-
-function openSubmitConfirm() {
-  const rows = getSelectedRows();
-
-  if (!rows.length) {
-    showMessage("salesMsg", "Please select at least one row.", "error");
-    return;
-  }
-
-  const total = rows.reduce((sum, row) => sum + Number(row.gross || 0), 0);
-
-  openModal(`
-    <h3>Confirm Submission</h3>
-    <p class="modal-text">You selected <strong>${rows.length}</strong> row(s).</p>
-    <p class="modal-text">Total Gross: <strong>AED ${total.toFixed(2)}</strong></p>
-    <div class="modal-actions">
-      <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="submitSelectedSales(false)">Submit</button>
-    </div>
-  `);
-}
-
-async function submitSelectedSales(allowDuplicate) {
-  closeModal();
-
-  const rows = pendingDuplicateOverrideRows.length
-    ? pendingDuplicateOverrideRows
-    : getSelectedRows();
-
-  if (!rows.length) {
-    showMessage("salesMsg", "Please select rows first.", "error");
-    return;
-  }
-
-  showMessage("salesMsg", "Submitting...");
-
-  try {
-    const res = await apiRequest({
-      action: "submitSales",
-      staff: currentUser.staff_name,
-      role: currentUser.role,
-      date: $("staffDate").value,
-      rows,
-      allowDuplicate
-    });
-
-    if (!res.ok && res.duplicateWarning) {
-      pendingDuplicateOverrideRows = rows;
-      openDuplicateModal(res.duplicates || []);
-      return;
-    }
-
-    if (!res.ok) {
-      showMessage("salesMsg", res.message || "Submission failed.", "error");
-      pendingDuplicateOverrideRows = [];
-      return;
-    }
-
-    pendingDuplicateOverrideRows = [];
-    showMessage("salesMsg", res.message || "Submitted successfully.", "success");
-    await loadSales();
-    await loadTodaySubmissions();
-  } catch {
-    showMessage("salesMsg", "Submission failed.", "error");
-  }
-}
-
-function openDuplicateModal(duplicates) {
-  const rows = duplicates.map(d => `
-    <tr>
-      <td>File no</td>
-      <td>${escapeHtml(d.file)}</td>
-    </tr>
-    <tr>
-      <td>Patient</td>
-      <td>${escapeHtml(d.patient)}</td>
-    </tr>
-    <tr>
-      <td>Submitted by</td>
-      <td>${escapeHtml(d.submitted_by)}</td>
-    </tr>
-    <tr>
-      <td>Time</td>
-      <td>${escapeHtml(d.submitted_at)}</td>
-    </tr>
-  `).join("");
-
-  openModal(`
-    <h3>Duplicate Warning</h3>
-    <p class="modal-text">Some selected rows were already submitted.</p>
-    <div class="table-wrap compact-table">
-      <table>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="submitSelectedSales(true)">Submit Anyway</button>
-    </div>
-  `);
-}
-
-async function loadTodaySubmissions() {
-  if (!currentUser || currentUser.role !== "staff") return;
-
-  showMessage("todayMsg", "Loading today's submissions...");
-
-  try {
-    const res = await apiRequest({
-      action: "todaySubmissions",
-      staff: currentUser.staff_name
-    });
-
-    if (!res.ok) {
-      showMessage("todayMsg", res.message || "Failed to load.", "error");
-      return;
-    }
-
-    renderTodayTable(res.rows || []);
-    showMessage("todayMsg", "");
-  } catch {
-    showMessage("todayMsg", "Failed to load.", "error");
-  }
-}
-
-function renderTodayTable(rows) {
-  const body = $("todayTableBody");
-  body.innerHTML = "";
-
-  if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="5">No submissions today.</td></tr>`;
-    return;
-  }
-
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td data-label="Time">${escapeHtml(r.time)}</td>
-      <td data-label="File no">${escapeHtml(r.file)}</td>
-      <td data-label="Patient">${escapeHtml(r.patient)}</td>
-      <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
-      <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-function openMissingSaleModal() {
-  openModal(`
-    <h3>Add Missing Sale</h3>
-    <p class="modal-text">This request will go to admin for approval.</p>
-    <div class="form-group">
-      <label>Client File Number</label>
-      <input type="text" id="missingFile" placeholder="Enter file number">
-    </div>
-    <div class="form-group">
-      <label>Date of Payment</label>
-      <input type="date" id="missingDate">
-    </div>
-    <div class="form-group">
-      <label>Treatment</label>
-      <input type="text" id="missingTreatment" placeholder="Enter treatment">
-    </div>
-    <div class="form-group">
-      <label>Gross without VAT</label>
-      <input type="number" id="missingGross" placeholder="Enter amount">
-    </div>
-    <div class="modal-actions">
-      <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="submitMissingSale()">Submit Request</button>
-    </div>
-  `);
-}
-
-async function submitMissingSale() {
-  const file = $("missingFile").value.trim();
-  const paymentDate = $("missingDate").value.trim();
-  const treatment = $("missingTreatment").value.trim();
-  const gross = $("missingGross").value.trim();
-
-  if (!file || !paymentDate || !treatment || !gross) {
-    alert("Please complete all fields.");
-    return;
-  }
-
-  try {
-    const res = await apiRequest({
-      action: "addMissingSale",
-      staff: currentUser.staff_name,
-      file,
-      payment_date: paymentDate,
-      treatment,
-      gross
-    });
-
-    if (!res.ok) {
-      alert(res.message || "Could not submit missing sale request.");
-      return;
-    }
-
-    closeModal();
-    alert("Missing sale request sent to admin.");
-  } catch {
-    alert("Could not submit missing sale request.");
-  }
-}
-
-async function loadAdminData() {
-  await loadAdminSubmissions();
-  await loadMissingRequests();
-  await loadTasks();
-}
-
-async function loadAdminSubmissions() {
-  showMessage("adminMsg", "Loading submissions...");
-
-  try {
-    const res = await apiRequest({
-      action: "getAdminSubmissions",
-      singleDate: $("adminSingleDate") ? $("adminSingleDate").value : "",
-      fromDate: $("adminFromDate") ? $("adminFromDate").value : "",
-      toDate: $("adminToDate") ? $("adminToDate").value : ""
-    });
-
-    if (!res.ok) {
-      showMessage("adminMsg", res.message || "Failed to load submissions.", "error");
-      return;
-    }
-
-    renderAdminSubmissions(res.rows || []);
-    showMessage("adminMsg", "");
-  } catch {
-    showMessage("adminMsg", "Failed to load submissions.", "error");
-  }
-}
-
-function renderAdminSubmissions(rows) {
-  const body = $("adminTableBody");
-  body.innerHTML = "";
-
-  if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="8">No submissions found.</td></tr>`;
-    return;
-  }
-
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td data-label="Time">${escapeHtml(r.timestamp)}</td>
-      <td data-label="Staff">${escapeHtml(r.staff)}</td>
-      <td data-label="Sale date">${escapeHtml(r.sale_date)}</td>
-      <td data-label="File no">${escapeHtml(r.file)}</td>
-      <td data-label="Patient">${escapeHtml(r.patient)}</td>
-      <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
-      <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
-      <td data-label="Actions">
-        <div class="table-actions">
-          <button class="btn-secondary btn-small" onclick='openEditSubmissionModal(${JSON.stringify(JSON.stringify(r))})'>Edit</button>
-          <button class="btn-danger btn-small" onclick='deleteSubmission(${r.row_number})'>Delete</button>
-        </div>
-      </td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-function openEditSubmissionModal(rowJson) {
-  const row = JSON.parse(rowJson);
-
-  openModal(`
-    <h3>Edit Submission</h3>
-    <div class="form-group">
-      <label>Staff name</label>
-      <input type="text" id="editStaff" value="${escapeHtml(row.staff)}">
-    </div>
-    <div class="form-group">
-      <label>Sale date</label>
-      <input type="date" id="editSaleDate" value="${escapeHtml(row.sale_date)}">
-    </div>
-    <div class="form-group">
-      <label>File no</label>
-      <input type="text" id="editFile" value="${escapeHtml(row.file)}">
-    </div>
-    <div class="form-group">
-      <label>Patient</label>
-      <input type="text" id="editPatient" value="${escapeHtml(row.patient)}">
-    </div>
-    <div class="form-group">
-      <label>Mobile</label>
-      <input type="text" id="editMobile" value="${escapeHtml(row.mobile || "")}">
-    </div>
-    <div class="form-group">
-      <label>Treatment</label>
-      <textarea id="editTreatment">${escapeHtml(row.treatment)}</textarea>
-    </div>
-    <div class="form-group">
-      <label>Gross</label>
-      <input type="number" id="editGross" value="${Number(row.gross)}">
-    </div>
-    <div class="modal-actions">
-      <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="saveSubmissionEdit(${row.row_number})">Save</button>
-    </div>
-  `);
-}
-
-async function saveSubmissionEdit(rowNumber) {
-  const record = {
-    staff: $("editStaff").value.trim(),
-    sale_date: $("editSaleDate").value.trim(),
-    file: $("editFile").value.trim(),
-    patient: $("editPatient").value.trim(),
-    mobile: $("editMobile").value.trim(),
-    treatment: $("editTreatment").value.trim(),
-    gross: $("editGross").value.trim()
-  };
-
-  try {
-    const res = await apiRequest({
-      action: "updateSubmission",
-      row_number: rowNumber,
-      record
-    });
-
-    if (!res.ok) {
-      alert(res.message || "Update failed.");
-      return;
-    }
-
-    closeModal();
-    loadAdminSubmissions();
-  } catch {
-    alert("Update failed.");
-  }
-}
-
-async function deleteSubmission(rowNumber) {
-  if (!confirm("Delete this submission?")) return;
-
-  try {
-    const res = await apiRequest({
-      action: "deleteSubmission",
-      row_number: rowNumber
-    });
-
-    if (!res.ok) {
-      alert(res.message || "Delete failed.");
-      return;
-    }
-
-    loadAdminSubmissions();
-  } catch {
-    alert("Delete failed.");
-  }
-}
-
-async function loadMissingRequests() {
-  showMessage("missingMsg", "Loading missing sale requests...");
-
-  try {
-    const res = await apiRequest({
-      action: "getMissingRequests",
-      singleDate: $("adminSingleDate") ? $("adminSingleDate").value : "",
-      fromDate: $("adminFromDate") ? $("adminFromDate").value : "",
-      toDate: $("adminToDate") ? $("adminToDate").value : ""
-    });
-
-    if (!res.ok) {
-      showMessage("missingMsg", res.message || "Failed to load missing sale requests.", "error");
-      return;
-    }
-
-    renderMissingRequests(res.rows || []);
-    showMessage("missingMsg", "");
-  } catch {
-    showMessage("missingMsg", "Failed to load missing sale requests.", "error");
-  }
-}
-
-function renderMissingRequests(rows) {
-  const body = $("missingTableBody");
-  body.innerHTML = "";
-
-  if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="9">No missing sale requests found.</td></tr>`;
-    return;
-  }
-
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td data-label="Requested">${escapeHtml(r.timestamp)}</td>
-      <td data-label="Staff">${escapeHtml(r.staff)}</td>
-      <td data-label="File no">${escapeHtml(r.file)}</td>
-      <td data-label="Payment date">${escapeHtml(r.payment_date)}</td>
-      <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
-      <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
-      <td data-label="Status">${escapeHtml(r.status)}</td>
-      <td data-label="Admin note">${escapeHtml(r.note || "")}</td>
-      <td data-label="Actions">
-        <div class="table-actions">
-          <button class="btn-secondary btn-small" onclick='approveMissing(${r.row_number})' ${r.status !== "Pending" ? "disabled" : ""}>Approve</button>
-          <button class="btn-danger btn-small" onclick='openRejectMissingModal(${r.row_number})' ${r.status !== "Pending" ? "disabled" : ""}>Reject</button>
-        </div>
-      </td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-async function approveMissing(rowNumber) {
-  if (!confirm("Approve this missing sale?")) return;
-
-  try {
-    const res = await apiRequest({
-      action: "approveMissing",
-      row_number: rowNumber
-    });
-
-    if (!res.ok) {
-      alert(res.message || "Approval failed.");
-      return;
-    }
-
-    loadMissingRequests();
-  } catch {
-    alert("Approval failed.");
-  }
-}
-
-function openRejectMissingModal(rowNumber) {
-  openModal(`
-    <h3>Reject Missing Sale</h3>
-    <div class="form-group">
-      <label>Rejection Reason</label>
-      <textarea id="rejectReason" placeholder="Enter rejection reason"></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button class="btn-danger" onclick="submitRejectMissing(${rowNumber})">Reject</button>
-    </div>
-  `);
-}
-
-async function submitRejectMissing(rowNumber) {
-  const note = $("rejectReason").value.trim();
-
-  try {
-    const res = await apiRequest({
-      action: "rejectMissing",
-      row_number: rowNumber,
-      note
-    });
-
-    if (!res.ok) {
-      alert(res.message || "Rejection failed.");
-      return;
-    }
-
-    closeModal();
-    loadMissingRequests();
-  } catch {
-    alert("Rejection failed.");
-  }
-}
-
-async function loadTasks() {
-  showMessage("taskMsg", "Loading tasks...");
-
-  try {
-    if (!validateTaskAssignedFilterSelection()) {
-      showMessage("taskMsg", "Please select a valid staff name.", "error");
-      return;
-    }
-
-    const status = $("taskStatusFilter") ? $("taskStatusFilter").value : "All";
-    const branch = $("taskBranchFilter") ? $("taskBranchFilter").value : "All";
-    const assignedName = $("taskAssignedValue") ? $("taskAssignedValue").value.trim() : "";
-
-    let url = `${API_URL}/Tasks?status=${encodeURIComponent(status)}&branch=${encodeURIComponent(branch)}`;
-
-    if (assignedName) {
-      const assignedStaff = findActiveStaffByName(assignedName);
-      if (assignedStaff) {
-        url += `&assignedTo=${assignedStaff.id}`;
-      }
-    }
-
-    const response = await fetch(url);
-    const rows = await response.json();
-
-    renderTasks(rows);
-    showMessage("taskMsg", "");
-  } catch (err) {
-    console.error(err);
-    showMessage("taskMsg", "Failed to load tasks.", "error");
-  }
-}
-
-function formatTaskDate(value) {
-  if (!value) return "";
-
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const year = d.getFullYear();
-
-  return `${day}-${month}-${year}`;
-}
-
-function getPriorityBadgeClass(priority) {
-  const value = String(priority || "").toLowerCase();
-
-  if (value === "urgent") return "badge badge-priority-urgent";
-  if (value === "high") return "badge badge-priority-high";
-  if (value === "medium") return "badge badge-priority-medium";
-  return "badge badge-priority-low";
-}
-
-function getStatusBadgeClass(status) {
-  const value = String(status || "").toLowerCase();
-
-  if (value === "completed") return "badge badge-status-completed";
-  if (value === "in progress") return "badge badge-status-progress";
-  if (value === "waiting") return "badge badge-status-waiting";
-  if (value === "cancelled") return "badge badge-status-cancelled";
-  if (value === "overdue") return "badge badge-status-overdue";
-  return "badge badge-status-new";
-}
-
-function renderTasks(rows) {
-  const body = $("taskTableBody");
-  if (!body) return;
-
-  body.innerHTML = "";
-
-  if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="8">No tasks found.</td></tr>`;
-    return;
-  }
-
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-
-    if (String(r.status || "").toLowerCase() === "overdue") {
-      tr.classList.add("task-overdue-row");
-    }
-
-    tr.innerHTML = `
-      <td data-label="Created">${escapeHtml(formatTaskDate(r.createdAt || r.created_at))}</td>
-      <td data-label="Title">
-        <div class="task-title-cell">
-          <strong>${escapeHtml(r.title)}</strong>
-          <div class="small-note">${escapeHtml(r.description || "")}</div>
-        </div>
-      </td>
-      <td data-label="Assigned To">${escapeHtml(r.assignedToName || r.assigned_to_name || "")}</td>
-      <td data-label="Branch">${escapeHtml(r.branch || "")}</td>
-      <td data-label="Priority">
-        <span class="${getPriorityBadgeClass(r.priority)}">${escapeHtml(r.priority || "")}</span>
-      </td>
-      <td data-label="Due Date">${escapeHtml(formatTaskDate(r.dueDate || r.due_date))}</td>
-      <td data-label="Status">
-        <span class="${getStatusBadgeClass(r.status)}">${escapeHtml(r.status || "")}</span>
-      </td>
-      <td data-label="Actions">
-        <div class="table-actions">
-          <button class="btn-secondary btn-small" onclick='updateTaskStatus(${r.id}, "In Progress")'>Start</button>
-          <button class="btn-light btn-small" onclick='updateTaskStatus(${r.id}, "Completed")'>Done</button>
-          <button class="btn-danger btn-small" onclick='updateTaskStatus(${r.id}, "Cancelled")'>Cancel</button>
-        </div>
-      </td>
-    `;
-
-    body.appendChild(tr);
-  });
-}
-
-async function createTask() {
-  const title = $("taskTitle").value.trim();
-  const description = $("taskDesc").value.trim();
-
-  if (!validateTaskAssignSelection()) {
-    showMessage("taskMsg", "Please select a valid active staff name.", "error");
-    return;
-  }
-
-  const assignedName = $("taskAssignValue").value.trim();
-  const assignedStaff = findActiveStaffByName(assignedName);
-  const createdById = findCurrentUserStaffId();
-
-  const branch = $("taskBranch").value;
-  const priority = $("taskPriority").value;
-  const dueDate = $("taskDue").value;
-
-  if (!title || !assignedName || !branch || !priority || !dueDate) {
-    showMessage("taskMsg", "Please complete all task fields.", "error");
-    return;
-  }
-
-  if (!assignedStaff) {
-    showMessage("taskMsg", "Assigned staff not found.", "error");
-    return;
-  }
-
-  if (!createdById) {
-    showMessage("taskMsg", "Current user mapping not found.", "error");
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_URL}/Tasks`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        title: title,
-        description: description,
-        assignedTo: assignedStaff.id,
-        createdBy: createdById,
-        branch: branch,
-        priority: priority,
-        dueDate: dueDate,
-        notes: ""
-      })
-    });
-
-    const res = await response.json();
-
-    if (!res.ok) {
-      showMessage("taskMsg", res.message || "Failed to create task.", "error");
-      return;
-    }
-
-    if ($("taskTitle")) $("taskTitle").value = "";
-    if ($("taskDesc")) $("taskDesc").value = "";
-    if ($("taskAssign")) $("taskAssign").value = "";
-    if ($("taskAssignValue")) $("taskAssignValue").value = "";
-    if ($("taskDue")) $("taskDue").value = "";
-
-    showMessage("taskMsg", "Task created successfully.", "success");
-    loadTasks();
-  } catch (err) {
-    console.error(err);
-    showMessage("taskMsg", "Failed to create task.", "error");
-  }
-}
-
-async function updateTaskStatus(rowNumber, status) {
-  try {
-    const response = await fetch(`${API_URL}/Tasks/${rowNumber}/status`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        status: status
-      })
-    });
-
-    const res = await response.json();
-
-    if (!res.ok) {
-      showMessage("taskMsg", res.message, "error");
-      return;
-    }
-
-    showMessage("taskMsg", "Task updated successfully.", "success");
-    loadTasks();
-  } catch (err) {
-    console.error(err);
-    showMessage("taskMsg", "Failed to update task.", "error");
-  }
-}
-
-async function downloadMonthlyPdf() {
-  try {
-    const res = await apiRequest({
-      action: "getMonthlyReport",
-      staff: currentUser.staff_name
-    });
-
-    if (!res.ok) {
-      alert(res.message || "Could not generate report.");
-      return;
-    }
-
-    if (!res.rows || !res.rows.length) {
-      alert("No records found for the current month.");
-      return;
-    }
-
-    const logoData = await loadLogoAsPngDataUrl("assets/logo.svg");
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF("p", "pt", "a4");
-
-    if (logoData) {
-      doc.addImage(logoData, "PNG", 40, 30, 120, 40);
-    }
-
-    doc.setFontSize(18);
-    doc.text("Monthly Submission Report", 40, 95);
-
-    doc.setFontSize(11);
-    doc.text(`Staff: ${currentUser.staff_name}`, 40, 115);
-    doc.text(`Month: ${res.month}`, 40, 132);
-    doc.text(`Total Gross: AED ${Number(res.total_gross || 0).toFixed(2)}`, 40, 149);
-
-    const tableBody = res.rows.map(r => [
-      r.type,
-      r.date,
-      r.file,
-      r.patient || "-",
-      r.treatment,
-      `AED ${Number(r.gross).toFixed(2)}`,
-      r.timestamp
-    ]);
-
-    doc.autoTable({
-      startY: 170,
-      head: [[
-        "Type",
-        "Date",
-        "File no",
-        "Patient",
-        "Treatment",
-        "Gross",
-        "Recorded"
-      ]],
-      body: tableBody,
-      styles: {
-        fontSize: 9,
-        cellPadding: 5
-      },
-      headStyles: {
-        fillColor: [184, 155, 94]
-      }
-    });
-
-    doc.save(`monthly-report-${currentUser.staff_name}-${res.month}.pdf`);
-  } catch {
-    alert("Could not generate PDF.");
-  }
-}
-
-function loadLogoAsPngDataUrl(path) {
-  return fetch(path)
-    .then(r => r.text())
-    .then(svgText => {
-      return new Promise(resolve => {
-        const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(svgBlob);
-        const img = new Image();
-
-        img.onload = function () {
-          const canvas = document.createElement("canvas");
-          canvas.width = img.width || 400;
-          canvas.height = img.height || 120;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0);
-          URL.revokeObjectURL(url);
-          resolve(canvas.toDataURL("image/png"));
-        };
-
-        img.onerror = function () {
-          resolve(null);
-        };
-
-        img.src = url;
-      });
-    })
-    .catch(() => null);
-}
-
-function openModal(html) {
-  $("modalHost").classList.remove("hidden");
-  $("modalHost").innerHTML = `
-    <div class="modal-backdrop">
-      <div class="modal">
-        ${html}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Commission Portal</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <div class="container">
+
+    <section id="loginPage" class="card login-card">
+      <div class="logo-wrap">
+        <img src="assets/logo.svg" class="clinic-logo" alt="Clinic Logo">
       </div>
-    </div>
-  `;
-}
 
-function closeModal() {
-  $("modalHost").classList.add("hidden");
-  $("modalHost").innerHTML = "";
-}
+      <h2>Staff Commission Portal</h2>
+      <p class="muted centered">Secure internal access for sales submission and commission review</p>
 
-window.closeModal = closeModal;
-window.submitSelectedSales = submitSelectedSales;
-window.submitPasswordChange = submitPasswordChange;
-window.openEditSubmissionModal = openEditSubmissionModal;
-window.saveSubmissionEdit = saveSubmissionEdit;
-window.deleteSubmission = deleteSubmission;
-window.approveMissing = approveMissing;
-window.openRejectMissingModal = openRejectMissingModal;
-window.submitRejectMissing = submitRejectMissing;
-window.submitMissingSale = submitMissingSale;
-window.updateTaskStatus = updateTaskStatus;
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Enter username">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter password">
+      </div>
+
+      <button id="loginBtn">Login</button>
+      <div id="loginMsg" class="msg"></div>
+    </section>
+
+    <section id="staffPage" class="hidden">
+      <div class="card">
+        <div class="topbar">
+          <div class="header-brand">
+            <div class="header-logo-wrap">
+              <img src="assets/logo.svg" class="header-logo" alt="Clinic Logo">
+            </div>
+            <div>
+              <h2 class="header-title">Staff Dashboard</h2>
+              <p class="header-subtitle" id="staffWelcome"></p>
+            </div>
+          </div>
+
+          <div class="header-actions">
+            <button class="btn-light" id="downloadMonthlyPdfBtn">Download Monthly PDF</button>
+            <button class="btn-secondary" id="openMissingSaleBtn">Add Missing Sale</button>
+            <button class="btn-light" id="logoutBtn1">Logout</button>
+          </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <div class="row two-col">
+          <div class="form-group">
+            <label for="staffDate">Select Date</label>
+            <input type="date" id="staffDate">
+          </div>
+
+          <div class="form-group action-align">
+            <label>&nbsp;</label>
+            <button id="loadSalesBtn">Load Sales</button>
+          </div>
+        </div>
+
+        <div id="salesMsg" class="msg"></div>
+
+        <div id="salesArea" class="hidden">
+          <div class="summary-grid">
+            <div class="summary-box">
+              <div class="summary-label">Rows Found</div>
+              <div class="summary-value" id="rowsFound">0</div>
+            </div>
+
+            <div class="summary-box">
+              <div class="summary-label">Selected Rows</div>
+              <div class="summary-value" id="selectedCount">0</div>
+            </div>
+
+            <div class="summary-box">
+              <div class="summary-label">Selected Gross</div>
+              <div class="summary-value">AED <span id="selectedGross">0.00</span></div>
+            </div>
+          </div>
+
+          <div class="table-wrap sales-table-wrap">
+            <table class="responsive-stack-table sales-table">
+              <thead>
+                <tr>
+                  <th style="width: 70px;">Select</th>
+                  <th style="width: 110px;">File no</th>
+                  <th>Patient</th>
+                  <th>Treatment</th>
+                  <th style="width: 120px;">Gross</th>
+                </tr>
+              </thead>
+              <tbody id="salesTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="sticky-submit">
+            <button id="submitSalesBtn">Submit Selected Sales</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h3>Today's Submitted Rows</h3>
+          <p class="muted">Entries submitted today under your account</p>
+        </div>
+
+        <div id="todayMsg" class="msg"></div>
+
+        <div class="table-wrap today-table-wrap">
+          <table class="responsive-stack-table today-table">
+            <thead>
+              <tr>
+                <th style="width: 170px;">Time</th>
+                <th style="width: 110px;">File no</th>
+                <th>Patient</th>
+                <th>Treatment</th>
+                <th style="width: 120px;">Gross</th>
+              </tr>
+            </thead>
+            <tbody id="todayTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h3>My Tasks</h3>
+          <p class="muted">Tasks assigned to you</p>
+        </div>
+
+        <div id="myTaskAlertBoxWrap"></div>
+        <div id="myTaskSummaryCards" class="summary-grid"></div>
+        <div id="myTaskMsg" class="msg"></div>
+
+        <div class="table-wrap task-table-wrap">
+          <table class="responsive-stack-table task-table my-task-table">
+            <thead>
+              <tr>
+                <th style="width: 150px;">Created</th>
+                <th>Title</th>
+                <th style="width: 120px;">Branch</th>
+                <th style="width: 110px;">Priority</th>
+                <th style="width: 120px;">Due Date</th>
+                <th style="width: 120px;">Status</th>
+                <th style="width: 180px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="myTaskTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="adminPage" class="hidden">
+      <div class="card">
+        <div class="topbar">
+          <div class="header-brand">
+            <div class="header-logo-wrap">
+              <img src="assets/logo.svg" class="header-logo" alt="Clinic Logo">
+            </div>
+            <div>
+              <h2 class="header-title">Admin Dashboard</h2>
+              <p class="header-subtitle" id="adminWelcome"></p>
+            </div>
+          </div>
+
+          <div class="header-actions">
+            <button class="btn-light" id="logoutBtn2">Logout</button>
+          </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <div class="filter-card">
+          <div class="row three-col">
+            <div class="form-group">
+              <label for="adminSingleDate">Single Date</label>
+              <input type="date" id="adminSingleDate">
+            </div>
+
+            <div class="form-group">
+              <label for="adminFromDate">From Date</label>
+              <input type="date" id="adminFromDate">
+            </div>
+
+            <div class="form-group">
+              <label for="adminToDate">To Date</label>
+              <input type="date" id="adminToDate">
+            </div>
+          </div>
+
+          <div class="toolbar-row">
+            <button id="applyAdminFilterBtn">Apply Filter</button>
+            <button class="btn-light" id="refreshAdminBtn">Refresh</button>
+          </div>
+        </div>
+
+        <div class="section-head">
+          <h3>Submissions</h3>
+        </div>
+
+        <div id="adminMsg" class="msg"></div>
+
+        <div class="table-wrap admin-table-wrap">
+          <table class="responsive-stack-table admin-table">
+            <thead>
+              <tr>
+                <th style="width: 170px;">Time</th>
+                <th style="width: 120px;">Staff</th>
+                <th style="width: 120px;">Sale date</th>
+                <th style="width: 110px;">File no</th>
+                <th>Patient</th>
+                <th>Treatment</th>
+                <th style="width: 120px;">Gross</th>
+                <th style="width: 170px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h3>Missing Sale Requests</h3>
+          <p class="muted">Approve or reject missing sale requests with notes</p>
+        </div>
+
+        <div id="missingMsg" class="msg"></div>
+
+        <div class="table-wrap missing-table-wrap">
+          <table class="responsive-stack-table missing-table">
+            <thead>
+              <tr>
+                <th style="width: 170px;">Requested</th>
+                <th style="width: 120px;">Staff</th>
+                <th style="width: 110px;">File no</th>
+                <th style="width: 120px;">Payment date</th>
+                <th>Treatment</th>
+                <th style="width: 120px;">Gross</th>
+                <th style="width: 100px;">Status</th>
+                <th>Admin Note</th>
+                <th style="width: 170px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="missingTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <h3>Admin Tasks</h3>
+          <p class="muted">Create, assign, and track internal clinic tasks</p>
+        </div>
+
+        <div class="filter-card">
+          <div class="row two-col">
+            <div class="form-group">
+              <label for="taskTitle">Task Title</label>
+              <input type="text" id="taskTitle" placeholder="Enter task title">
+            </div>
+
+            <div class="form-group">
+              <label for="taskAssign">Assign To</label>
+              <div class="autocomplete-wrap">
+                <input type="text" id="taskAssign" placeholder="Search active staff" autocomplete="off">
+                <input type="hidden" id="taskAssignValue">
+                <div id="taskAssignSuggestions" class="autocomplete-list hidden"></div>
+                <div id="taskAssignError" class="field-error hidden">Select a valid active staff name</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="taskDesc">Description</label>
+            <textarea id="taskDesc" placeholder="Enter task description"></textarea>
+          </div>
+
+          <div class="row three-col">
+            <div class="form-group">
+              <label for="taskBranch">Branch</label>
+              <select id="taskBranch">
+                <option value="Jumeirah">Jumeirah</option>
+                <option value="Al Barsha">Al Barsha</option>
+                <option value="All">All</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskPriority">Priority</label>
+              <select id="taskPriority">
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Urgent">Urgent</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskDue">Due Date</label>
+              <input type="date" id="taskDue">
+            </div>
+          </div>
+
+          <div class="toolbar-row">
+            <button id="createTaskBtn">Create Task</button>
+            <button class="btn-light" id="refreshTasksBtn">Refresh Tasks</button>
+          </div>
+        </div>
+
+        <div class="filter-card">
+          <div class="row three-col">
+            <div class="form-group">
+              <label for="taskStatusFilter">Status Filter</label>
+              <select id="taskStatusFilter">
+                <option value="All">All</option>
+                <option value="New">New</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Waiting">Waiting</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Overdue">Overdue</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskBranchFilter">Branch Filter</label>
+              <select id="taskBranchFilter">
+                <option value="All">All</option>
+                <option value="Jumeirah">Jumeirah</option>
+                <option value="Al Barsha">Al Barsha</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="taskAssignedFilter">Assigned To</label>
+              <div class="autocomplete-wrap">
+                <input type="text" id="taskAssignedFilter" placeholder="Search assigned staff" autocomplete="off">
+                <input type="hidden" id="taskAssignedValue">
+                <div id="taskAssignedSuggestions" class="autocomplete-list hidden"></div>
+                <div id="taskAssignedError" class="field-error hidden">Select a valid staff name</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="task-search-wrap">
+            <div class="form-group">
+              <label for="taskSearchInput">Search</label>
+              <input type="text" id="taskSearchInput" placeholder="Search title, assigned, branch, priority, status">
+            </div>
+          </div>
+
+          <div class="toolbar-row">
+            <button id="applyTaskFilterBtn">Apply Task Filter</button>
+          </div>
+        </div>
+
+        <div id="taskAlertBoxWrap"></div>
+        <div id="taskSummaryCards" class="summary-grid"></div>
+        <div id="taskMsg" class="msg"></div>
+
+        <div class="table-wrap task-table-wrap">
+          <table class="responsive-stack-table task-table">
+            <thead>
+              <tr>
+                <th style="width: 150px;">Created</th>
+                <th>Title</th>
+                <th style="width: 140px;">Assigned To</th>
+                <th style="width: 120px;">Branch</th>
+                <th style="width: 110px;">Priority</th>
+                <th style="width: 120px;">Due Date</th>
+                <th style="width: 120px;">Status</th>
+                <th style="width: 200px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="taskTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div id="modalHost" class="hidden"></div>
+
+  <script src="script.js?v=3"></script>
+</body>
+</html>
