@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:5282/api";
+const API_URL = "http://165.73.252.244:5282/api";
 
 let currentUser = null;
 let currentSalesRows = [];
