@@ -3,6 +3,7 @@ const API_URL = "https://api.bionixstaff.com/api";
 let currentUser = null;
 let currentSalesRows = [];
 let pendingDuplicateOverrideRows = [];
+let activeStaffList = [];
 let activeStaffNames = [];
 
 function $(id) {
@@ -95,15 +96,41 @@ async function loadActiveStaff() {
     const res = await response.json();
 
     if (Array.isArray(res)) {
-      activeStaffNames = res.map(x => x.staffName).filter(Boolean);
+      activeStaffList = res.map(x => ({
+        id: x.id,
+        staffName: x.staffName,
+        role: x.role
+      }));
+
+      activeStaffNames = activeStaffList
+        .map(x => x.staffName)
+        .filter(Boolean);
+
       return;
     }
 
+    activeStaffList = [];
     activeStaffNames = [];
   } catch (err) {
     console.log("Failed to load active staff", err);
+    activeStaffList = [];
     activeStaffNames = [];
   }
+}
+
+function findActiveStaffByName(name) {
+  const clean = String(name || "").trim().toLowerCase();
+  if (!clean) return null;
+
+  return activeStaffList.find(x => String(x.staffName || "").trim().toLowerCase() === clean) || null;
+}
+
+function findCurrentUserStaffId() {
+  if (currentUser && currentUser.id) return currentUser.id;
+  if (!currentUser || !currentUser.staff_name) return null;
+
+  const match = findActiveStaffByName(currentUser.staff_name);
+  return match ? match.id : null;
 }
 
 function findExactActiveStaffName(value) {
@@ -127,7 +154,6 @@ function initAutocompleteField(config) {
   if (!input || !hidden || !suggestions || !error) return;
 
   let activeIndex = -1;
-  let filteredList = [];
 
   function clearError() {
     input.classList.remove("invalid");
@@ -146,8 +172,6 @@ function initAutocompleteField(config) {
   }
 
   function renderSuggestions(list) {
-    filteredList = list;
-
     if (!list.length) {
       hideSuggestions();
       return;
@@ -370,6 +394,7 @@ async function doLogin() {
     }
 
     currentUser = {
+      id: res.user.id,
       username: res.user.username,
       staff_name: res.user.staffName,
       role: String(res.user.role || "").toLowerCase(),
@@ -475,6 +500,7 @@ async function submitPasswordChange() {
     alert("Password change failed.");
   }
 }
+
 async function loadSales() {
   const date = $("staffDate").value;
 
@@ -1031,10 +1057,23 @@ async function loadTasks() {
   showMessage("taskMsg", "Loading tasks...");
 
   try {
+    if (!validateTaskAssignedFilterSelection()) {
+      showMessage("taskMsg", "Please select a valid staff name.", "error");
+      return;
+    }
+
     const status = $("taskStatusFilter") ? $("taskStatusFilter").value : "All";
     const branch = $("taskBranchFilter") ? $("taskBranchFilter").value : "All";
+    const assignedName = $("taskAssignedValue") ? $("taskAssignedValue").value.trim() : "";
 
-    const url = `${API_URL}/Tasks?status=${status}&branch=${branch}`;
+    let url = `${API_URL}/Tasks?status=${encodeURIComponent(status)}&branch=${encodeURIComponent(branch)}`;
+
+    if (assignedName) {
+      const assignedStaff = findActiveStaffByName(assignedName);
+      if (assignedStaff) {
+        url += `&assignedTo=${assignedStaff.id}`;
+      }
+    }
 
     const response = await fetch(url);
     const rows = await response.json();
@@ -1045,6 +1084,39 @@ async function loadTasks() {
     console.error(err);
     showMessage("taskMsg", "Failed to load tasks.", "error");
   }
+}
+
+function formatTaskDate(value) {
+  if (!value) return "";
+
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = d.toLocaleString("en-US", { month: "short" });
+  const year = d.getFullYear();
+
+  return `${day}-${month}-${year}`;
+}
+
+function getPriorityBadgeClass(priority) {
+  const value = String(priority || "").toLowerCase();
+
+  if (value === "urgent") return "badge badge-priority-urgent";
+  if (value === "high") return "badge badge-priority-high";
+  if (value === "medium") return "badge badge-priority-medium";
+  return "badge badge-priority-low";
+}
+
+function getStatusBadgeClass(status) {
+  const value = String(status || "").toLowerCase();
+
+  if (value === "completed") return "badge badge-status-completed";
+  if (value === "in progress") return "badge badge-status-progress";
+  if (value === "waiting") return "badge badge-status-waiting";
+  if (value === "cancelled") return "badge badge-status-cancelled";
+  if (value === "overdue") return "badge badge-status-overdue";
+  return "badge badge-status-new";
 }
 
 function renderTasks(rows) {
@@ -1061,22 +1133,32 @@ function renderTasks(rows) {
   rows.forEach(r => {
     const tr = document.createElement("tr");
 
+    if (String(r.status || "").toLowerCase() === "overdue") {
+      tr.classList.add("task-overdue-row");
+    }
+
     tr.innerHTML = `
-      <td data-label="Created">${escapeHtml(r.timestamp)}</td>
+      <td data-label="Created">${escapeHtml(formatTaskDate(r.createdAt || r.created_at))}</td>
       <td data-label="Title">
-        <strong>${escapeHtml(r.title)}</strong><br>
-        <span class="small-note">${escapeHtml(r.description || "")}</span>
+        <div class="task-title-cell">
+          <strong>${escapeHtml(r.title)}</strong>
+          <div class="small-note">${escapeHtml(r.description || "")}</div>
+        </div>
       </td>
-      <td data-label="Assigned To">${escapeHtml(r.assigned_to)}</td>
-      <td data-label="Branch">${escapeHtml(r.branch)}</td>
-      <td data-label="Priority">${escapeHtml(r.priority)}</td>
-      <td data-label="Due Date">${escapeHtml(r.due_date)}</td>
-      <td data-label="Status">${escapeHtml(r.status)}</td>
+      <td data-label="Assigned To">${escapeHtml(r.assignedToName || r.assigned_to_name || "")}</td>
+      <td data-label="Branch">${escapeHtml(r.branch || "")}</td>
+      <td data-label="Priority">
+        <span class="${getPriorityBadgeClass(r.priority)}">${escapeHtml(r.priority || "")}</span>
+      </td>
+      <td data-label="Due Date">${escapeHtml(formatTaskDate(r.dueDate || r.due_date))}</td>
+      <td data-label="Status">
+        <span class="${getStatusBadgeClass(r.status)}">${escapeHtml(r.status || "")}</span>
+      </td>
       <td data-label="Actions">
         <div class="table-actions">
-          <button class="btn-secondary btn-small" onclick='updateTaskStatus(${r.row_number}, "In Progress")'>Start</button>
-          <button class="btn-light btn-small" onclick='updateTaskStatus(${r.row_number}, "Completed")'>Done</button>
-          <button class="btn-danger btn-small" onclick='updateTaskStatus(${r.row_number}, "Cancelled")'>Cancel</button>
+          <button class="btn-secondary btn-small" onclick='updateTaskStatus(${r.id}, "In Progress")'>Start</button>
+          <button class="btn-light btn-small" onclick='updateTaskStatus(${r.id}, "Completed")'>Done</button>
+          <button class="btn-danger btn-small" onclick='updateTaskStatus(${r.id}, "Cancelled")'>Cancel</button>
         </div>
       </td>
     `;
@@ -1088,12 +1170,32 @@ function renderTasks(rows) {
 async function createTask() {
   const title = $("taskTitle").value.trim();
   const description = $("taskDesc").value.trim();
+
+  if (!validateTaskAssignSelection()) {
+    showMessage("taskMsg", "Please select a valid active staff name.", "error");
+    return;
+  }
+
+  const assignedName = $("taskAssignValue").value.trim();
+  const assignedStaff = findActiveStaffByName(assignedName);
+  const createdById = findCurrentUserStaffId();
+
   const branch = $("taskBranch").value;
   const priority = $("taskPriority").value;
   const dueDate = $("taskDue").value;
 
-  if (!title || !branch || !priority || !dueDate) {
-    showMessage("taskMsg", "Please complete all fields.", "error");
+  if (!title || !assignedName || !branch || !priority || !dueDate) {
+    showMessage("taskMsg", "Please complete all task fields.", "error");
+    return;
+  }
+
+  if (!assignedStaff) {
+    showMessage("taskMsg", "Assigned staff not found.", "error");
+    return;
+  }
+
+  if (!createdById) {
+    showMessage("taskMsg", "Current user mapping not found.", "error");
     return;
   }
 
@@ -1106,8 +1208,8 @@ async function createTask() {
       body: JSON.stringify({
         title: title,
         description: description,
-        assignedTo: 1,   // temporary
-        createdBy: 1,    // temporary
+        assignedTo: assignedStaff.id,
+        createdBy: createdById,
         branch: branch,
         priority: priority,
         dueDate: dueDate,
@@ -1118,46 +1220,33 @@ async function createTask() {
     const res = await response.json();
 
     if (!res.ok) {
-      showMessage("taskMsg", res.message, "error");
+      showMessage("taskMsg", res.message || "Failed to create task.", "error");
       return;
     }
 
+    if ($("taskTitle")) $("taskTitle").value = "";
+    if ($("taskDesc")) $("taskDesc").value = "";
+    if ($("taskAssign")) $("taskAssign").value = "";
+    if ($("taskAssignValue")) $("taskAssignValue").value = "";
+    if ($("taskDue")) $("taskDue").value = "";
+
     showMessage("taskMsg", "Task created successfully.", "success");
     loadTasks();
-
   } catch (err) {
     console.error(err);
     showMessage("taskMsg", "Failed to create task.", "error");
   }
 }
 
-async function createTask() {
-  const title = $("taskTitle").value.trim();
-  const description = $("taskDesc").value.trim();
-  const branch = $("taskBranch").value;
-  const priority = $("taskPriority").value;
-  const dueDate = $("taskDue").value;
-
-  if (!title || !branch || !priority || !dueDate) {
-    showMessage("taskMsg", "Please complete all fields.", "error");
-    return;
-  }
-
+async function updateTaskStatus(rowNumber, status) {
   try {
-    const response = await fetch(`${API_URL}/Tasks`, {
-      method: "POST",
+    const response = await fetch(`${API_URL}/Tasks/${rowNumber}/status`, {
+      method: "PATCH",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        title: title,
-        description: description,
-        assignedTo: 1,   // temporary
-        createdBy: 1,    // temporary
-        branch: branch,
-        priority: priority,
-        dueDate: dueDate,
-        notes: ""
+        status: status
       })
     });
 
@@ -1168,14 +1257,14 @@ async function createTask() {
       return;
     }
 
-    showMessage("taskMsg", "Task created successfully.", "success");
+    showMessage("taskMsg", "Task updated successfully.", "success");
     loadTasks();
-
   } catch (err) {
     console.error(err);
-    showMessage("taskMsg", "Failed to create task.", "error");
+    showMessage("taskMsg", "Failed to update task.", "error");
   }
 }
+
 async function downloadMonthlyPdf() {
   try {
     const res = await apiRequest({
