@@ -1,4 +1,4 @@
-const API_URL = "https://165.73.252.244:5282/api";
+const API_URL = "https://api.bionixstaff.com/api";
 
 let currentUser = null;
 let currentSalesRows = [];
