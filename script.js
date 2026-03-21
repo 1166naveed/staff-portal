@@ -448,11 +448,18 @@ async function submitPasswordChange() {
   }
 
   try {
-    const res = await apiRequest({
-      action: "changePassword",
-      username: currentUser.username,
-      new_password: p1
+    const response = await fetch(`${API_URL}/Auth/change-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        username: currentUser.username,
+        newPassword: p1
+      })
     });
+
+    const res = await response.json();
 
     if (!res.ok) {
       alert(res.message || "Password change failed.");
@@ -463,11 +470,11 @@ async function submitPasswordChange() {
     persistSession(currentUser);
     closeModal();
     showLoggedInUI();
-  } catch {
+  } catch (err) {
+    console.error(err);
     alert("Password change failed.");
   }
 }
-
 async function loadSales() {
   const date = $("staffDate").value;
 
