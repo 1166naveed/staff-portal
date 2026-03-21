@@ -393,7 +393,7 @@ tr.submitted-row {
 .modal {
   background: #fff;
   width: 100%;
-  max-width: 580px;
+  max-width: 720px;
   border-radius: 20px;
   padding: 22px;
   max-height: 90vh;
@@ -535,21 +535,18 @@ textarea {
     margin-bottom: 3px;
   }
 
-  /* Sales table labels */
   .sales-table tbody td:nth-child(1)::before { content: "Select"; }
   .sales-table tbody td:nth-child(2)::before { content: "File no"; }
   .sales-table tbody td:nth-child(3)::before { content: "Patient"; }
   .sales-table tbody td:nth-child(4)::before { content: "Treatment"; }
   .sales-table tbody td:nth-child(5)::before { content: "Gross"; }
 
-  /* Today's submissions labels */
   .today-table tbody td:nth-child(1)::before { content: "Time"; }
   .today-table tbody td:nth-child(2)::before { content: "File no"; }
   .today-table tbody td:nth-child(3)::before { content: "Patient"; }
   .today-table tbody td:nth-child(4)::before { content: "Treatment"; }
   .today-table tbody td:nth-child(5)::before { content: "Gross"; }
 
-  /* Admin submissions labels */
   .admin-table tbody td:nth-child(1)::before { content: "Time"; }
   .admin-table tbody td:nth-child(2)::before { content: "Staff"; }
   .admin-table tbody td:nth-child(3)::before { content: "Sale date"; }
@@ -559,7 +556,6 @@ textarea {
   .admin-table tbody td:nth-child(7)::before { content: "Gross"; }
   .admin-table tbody td:nth-child(8)::before { content: "Actions"; }
 
-  /* Missing sale labels */
   .missing-table tbody td:nth-child(1)::before { content: "Requested"; }
   .missing-table tbody td:nth-child(2)::before { content: "Staff"; }
   .missing-table tbody td:nth-child(3)::before { content: "File no"; }
@@ -570,7 +566,6 @@ textarea {
   .missing-table tbody td:nth-child(8)::before { content: "Admin note"; }
   .missing-table tbody td:nth-child(9)::before { content: "Actions"; }
 
-  /* Task table labels */
   .task-table tbody td:nth-child(1)::before { content: "Created"; }
   .task-table tbody td:nth-child(2)::before { content: "Title"; }
   .task-table tbody td:nth-child(3)::before { content: "Assigned To"; }
@@ -579,6 +574,14 @@ textarea {
   .task-table tbody td:nth-child(6)::before { content: "Due Date"; }
   .task-table tbody td:nth-child(7)::before { content: "Status"; }
   .task-table tbody td:nth-child(8)::before { content: "Actions"; }
+
+  .my-task-table tbody td:nth-child(1)::before { content: "Created"; }
+  .my-task-table tbody td:nth-child(2)::before { content: "Title"; }
+  .my-task-table tbody td:nth-child(3)::before { content: "Branch"; }
+  .my-task-table tbody td:nth-child(4)::before { content: "Priority"; }
+  .my-task-table tbody td:nth-child(5)::before { content: "Due Date"; }
+  .my-task-table tbody td:nth-child(6)::before { content: "Status"; }
+  .my-task-table tbody td:nth-child(7)::before { content: "Actions"; }
 
   .responsive-stack-table td .table-actions {
     margin-top: 4px;
@@ -632,7 +635,6 @@ textarea {
 input.invalid {
   border-color: #dc2626;
 }
-
 
 .badge {
   display: inline-block;
@@ -702,4 +704,90 @@ input.invalid {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.task-title-link {
+  cursor: pointer;
+  color: #1f2937;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.task-title-link:hover {
+  opacity: 0.85;
+}
+
+.alert-box {
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.alert-box-danger {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.alert-box-warning {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.alert-box-info {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 24px 16px;
+  color: #6b7280;
+}
+
+.task-details-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px 14px;
+  margin-top: 12px;
+  margin-bottom: 18px;
+}
+
+.task-details-label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.task-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.task-activity-item {
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.task-activity-meta {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.task-search-wrap {
+  margin-top: 10px;
+}
+
+@media (max-width: 768px) {
+  .task-details-grid {
+    grid-template-columns: 1fr;
+  }
 }
