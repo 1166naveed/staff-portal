@@ -1031,28 +1031,18 @@ async function loadTasks() {
   showMessage("taskMsg", "Loading tasks...");
 
   try {
-    if (!validateTaskAssignedFilterSelection()) {
-      showMessage("taskMsg", "Please select a valid assigned staff name for filtering, or clear the field.", "error");
-      return;
-    }
+    const status = $("taskStatusFilter") ? $("taskStatusFilter").value : "All";
+    const branch = $("taskBranchFilter") ? $("taskBranchFilter").value : "All";
 
-    const assignedValue = $("taskAssignedValue") ? $("taskAssignedValue").value.trim() : "";
+    const url = `${API_URL}/Tasks?status=${status}&branch=${branch}`;
 
-    const res = await apiRequest({
-      action: "getTasks",
-      status: $("taskStatusFilter") ? $("taskStatusFilter").value : "All",
-      branch: $("taskBranchFilter") ? $("taskBranchFilter").value : "All",
-      assigned_to: assignedValue || "All"
-    });
+    const response = await fetch(url);
+    const rows = await response.json();
 
-    if (!res.ok) {
-      showMessage("taskMsg", res.message || "Failed to load tasks.", "error");
-      return;
-    }
-
-    renderTasks(res.rows || []);
+    renderTasks(rows);
     showMessage("taskMsg", "");
-  } catch {
+  } catch (err) {
+    console.error(err);
     showMessage("taskMsg", "Failed to load tasks.", "error");
   }
 }
