@@ -557,6 +557,8 @@ async function submitPasswordChange() {
   }
 }
 
+/* ================= SALES FROM SQL ================= */
+
 async function loadSales() {
   const date = $("staffDate").value;
 
@@ -568,11 +570,8 @@ async function loadSales() {
   showMessage("salesMsg", "Loading sales...");
 
   try {
-    const res = await apiRequest({
-      action: "getSales",
-      date,
-      role: currentUser.role
-    });
+    const response = await fetch(`${API_URL}/Sales?date=${encodeURIComponent(date)}`);
+    const res = await response.json();
 
     if (!res.ok) {
       showMessage("salesMsg", res.message || "Failed to load sales.", "error");
@@ -580,11 +579,12 @@ async function loadSales() {
       return;
     }
 
-    currentSalesRows = res.rows || [];
+    currentSalesRows = Array.isArray(res.rows) ? res.rows : [];
     renderSalesTable(currentSalesRows);
     if ($("salesArea")) $("salesArea").classList.remove("hidden");
     showMessage("salesMsg", "");
-  } catch {
+  } catch (err) {
+    console.error(err);
     showMessage("salesMsg", "Failed to load sales.", "error");
   }
 }
@@ -660,17 +660,15 @@ function openSubmitConfirm() {
     <p class="modal-text">Total Gross: <strong>AED ${total.toFixed(2)}</strong></p>
     <div class="modal-actions">
       <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="submitSelectedSales(false)">Submit</button>
+      <button onclick="submitSelectedSales()">Submit</button>
     </div>
   `);
 }
 
-async function submitSelectedSales(allowDuplicate) {
+async function submitSelectedSales() {
   closeModal();
 
-  const rows = pendingDuplicateOverrideRows.length
-    ? pendingDuplicateOverrideRows
-    : getSelectedRows();
+  const rows = getSelectedRows();
 
   if (!rows.length) {
     showMessage("salesMsg", "Please select rows first.", "error");
@@ -680,24 +678,30 @@ async function submitSelectedSales(allowDuplicate) {
   showMessage("salesMsg", "Submitting...");
 
   try {
-    const res = await apiRequest({
-      action: "submitSales",
+    const payload = {
       staff: currentUser.staff_name,
-      role: currentUser.role,
       date: $("staffDate").value,
-      rows,
-      allowDuplicate
+      rows: rows.map(row => ({
+        file: row.file || "",
+        patient: row.patient || "",
+        mobile: row.mobile || row.mobileNo || "",
+        treatment: row.treatment || "",
+        gross: Number(row.gross || 0)
+      }))
+    };
+
+    const response = await fetch(`${API_URL}/Sales/submit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
     });
 
-    if (!res.ok && res.duplicateWarning) {
-      pendingDuplicateOverrideRows = rows;
-      openDuplicateModal(res.duplicates || []);
-      return;
-    }
+    const res = await response.json();
 
     if (!res.ok) {
       showMessage("salesMsg", res.message || "Submission failed.", "error");
-      pendingDuplicateOverrideRows = [];
       return;
     }
 
@@ -705,7 +709,8 @@ async function submitSelectedSales(allowDuplicate) {
     showMessage("salesMsg", res.message || "Submitted successfully.", "success");
     await loadSales();
     await loadTodaySubmissions();
-  } catch {
+  } catch (err) {
+    console.error(err);
     showMessage("salesMsg", "Submission failed.", "error");
   }
 }
@@ -740,7 +745,7 @@ function openDuplicateModal(duplicates) {
     </div>
     <div class="modal-actions">
       <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="submitSelectedSales(true)">Submit Anyway</button>
+      <button onclick="closeModal()">Close</button>
     </div>
   `);
 }
@@ -751,10 +756,8 @@ async function loadTodaySubmissions() {
   showMessage("todayMsg", "Loading today's submissions...");
 
   try {
-    const res = await apiRequest({
-      action: "todaySubmissions",
-      staff: currentUser.staff_name
-    });
+    const response = await fetch(`${API_URL}/Sales/today-submissions?staff=${encodeURIComponent(currentUser.staff_name)}`);
+    const res = await response.json();
 
     if (!res.ok) {
       showMessage("todayMsg", res.message || "Failed to load.", "error");
@@ -763,7 +766,8 @@ async function loadTodaySubmissions() {
 
     renderTodayTable(res.rows || []);
     showMessage("todayMsg", "");
-  } catch {
+  } catch (err) {
+    console.error(err);
     showMessage("todayMsg", "Failed to load.", "error");
   }
 }
@@ -789,6 +793,8 @@ function renderTodayTable(rows) {
     body.appendChild(tr);
   });
 }
+
+/* ================= OLD GOOGLE SCRIPT PARTS STILL ACTIVE ================= */
 
 function openMissingSaleModal() {
   openModal(`
@@ -1108,6 +1114,8 @@ async function submitRejectMissing(rowNumber) {
     alert("Rejection failed.");
   }
 }
+
+/* ================= TASKS ================= */
 
 function taskMatchesSearch(row, searchTerm) {
   if (!searchTerm) return true;
