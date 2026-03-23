@@ -835,14 +835,21 @@ async function submitMissingSale() {
   }
 
   try {
-    const res = await apiRequest({
-      action: "addMissingSale",
-      staff: currentUser.staff_name,
-      file,
-      payment_date: paymentDate,
-      treatment,
-      gross
+    const response = await fetch(`${API_URL}/MissingSales`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        staffName: currentUser.staff_name,
+        fileNo: file,
+        paymentDate: paymentDate,
+        treatment: treatment,
+        gross: Number(gross)
+      })
     });
+
+    const res = await response.json();
 
     if (!res.ok) {
       alert(res.message || "Could not submit missing sale request.");
@@ -855,7 +862,6 @@ async function submitMissingSale() {
     alert("Could not submit missing sale request.");
   }
 }
-
 async function loadAdminData() {
   await loadAdminSubmissions();
   await loadMissingRequests();
