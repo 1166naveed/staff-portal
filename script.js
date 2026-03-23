@@ -1093,15 +1093,19 @@ function openRejectMissingModal(rowNumber) {
   `);
 }
 
-async function submitRejectMissing(rowNumber) {
+async function submitRejectMissing(id) {
   const note = $("rejectReason").value.trim();
 
   try {
-    const res = await apiRequest({
-      action: "rejectMissing",
-      row_number: rowNumber,
-      note
+    const response = await fetch(`${API_URL}/MissingSales/${id}/reject`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(note)
     });
+
+    const res = await response.json();
 
     if (!res.ok) {
       alert(res.message || "Rejection failed.");
