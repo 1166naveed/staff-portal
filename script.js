@@ -1015,19 +1015,10 @@ async function loadMissingRequests() {
   showMessage("missingMsg", "Loading missing sale requests...");
 
   try {
-    const res = await apiRequest({
-      action: "getMissingRequests",
-      singleDate: $("adminSingleDate") ? $("adminSingleDate").value : "",
-      fromDate: $("adminFromDate") ? $("adminFromDate").value : "",
-      toDate: $("adminToDate") ? $("adminToDate").value : ""
-    });
+    const response = await fetch(`${API_URL}/MissingSales`);
+    const rows = await response.json();
 
-    if (!res.ok) {
-      showMessage("missingMsg", res.message || "Failed to load missing sale requests.", "error");
-      return;
-    }
-
-    renderMissingRequests(res.rows || []);
+    renderMissingRequests(Array.isArray(rows) ? rows : []);
     showMessage("missingMsg", "");
   } catch {
     showMessage("missingMsg", "Failed to load missing sale requests.", "error");
