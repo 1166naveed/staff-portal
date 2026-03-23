@@ -1058,14 +1058,15 @@ function renderMissingRequests(rows) {
   });
 }
 
-async function approveMissing(rowNumber) {
+async function approveMissing(id) {
   if (!confirm("Approve this missing sale?")) return;
 
   try {
-    const res = await apiRequest({
-      action: "approveMissing",
-      row_number: rowNumber
+    const response = await fetch(`${API_URL}/MissingSales/${id}/approve`, {
+      method: "PATCH"
     });
+
+    const res = await response.json();
 
     if (!res.ok) {
       alert(res.message || "Approval failed.");
