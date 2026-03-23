@@ -841,12 +841,13 @@ async function submitMissingSale() {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        staffName: currentUser.staff_name,
-        fileNo: file,
-        paymentDate: paymentDate,
-        treatment: treatment,
-        gross: Number(gross)
-      })
+  staffName: currentUser.staff_name,
+  fileNo: file,
+  paymentDate: paymentDate,
+  treatment: treatment,
+  gross: Number(gross),
+  adminNote: ""
+})
     });
 
     const res = await response.json();
