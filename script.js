@@ -1039,18 +1039,18 @@ function renderMissingRequests(rows) {
   rows.forEach(r => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td data-label="Requested">${escapeHtml(r.timestamp)}</td>
-      <td data-label="Staff">${escapeHtml(r.staff)}</td>
-      <td data-label="File no">${escapeHtml(r.file)}</td>
-      <td data-label="Payment date">${escapeHtml(r.payment_date)}</td>
-      <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
-      <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
-      <td data-label="Status">${escapeHtml(r.status)}</td>
-      <td data-label="Admin note">${escapeHtml(r.note || "")}</td>
+      <td data-label="Requested">${escapeHtml(formatTaskDateTime(r.createdAt))}</td>
+      <td data-label="Staff">${escapeHtml(r.staffName || "")}</td>
+      <td data-label="File no">${escapeHtml(r.fileNo || "")}</td>
+      <td data-label="Payment date">${escapeHtml(formatTaskDate(r.paymentDate))}</td>
+      <td data-label="Treatment">${escapeHtml(r.treatment || "")}</td>
+      <td data-label="Gross">AED ${Number(r.gross || 0).toFixed(2)}</td>
+      <td data-label="Status">${escapeHtml(r.status || "")}</td>
+      <td data-label="Admin note">${escapeHtml(r.adminNote || "")}</td>
       <td data-label="Actions">
         <div class="table-actions">
-          <button class="btn-secondary btn-small" onclick='approveMissing(${r.row_number})' ${r.status !== "Pending" ? "disabled" : ""}>Approve</button>
-          <button class="btn-danger btn-small" onclick='openRejectMissingModal(${r.row_number})' ${r.status !== "Pending" ? "disabled" : ""}>Reject</button>
+          <button class="btn-secondary btn-small" onclick='approveMissing(${r.id})' ${r.status !== "Pending" ? "disabled" : ""}>Approve</button>
+          <button class="btn-danger btn-small" onclick='openRejectMissingModal(${r.id})' ${r.status !== "Pending" ? "disabled" : ""}>Reject</button>
         </div>
       </td>
     `;
