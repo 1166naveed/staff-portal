@@ -1020,7 +1020,8 @@ async function loadMissingRequests() {
 
     renderMissingRequests(Array.isArray(rows) ? rows : []);
     showMessage("missingMsg", "");
-  } catch {
+  } catch (err) {
+    console.error(err);
     showMessage("missingMsg", "Failed to load missing sale requests.", "error");
   }
 }
