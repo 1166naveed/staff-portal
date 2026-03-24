@@ -1828,6 +1828,36 @@ function closeModal() {
   currentOpenTaskId = null;
 }
 
+
+function loadLogoAsPngDataUrl(path) {
+  return fetch(path)
+    .then(r => r.text())
+    .then(svgText => {
+      return new Promise(resolve => {
+        const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+        const img = new Image();
+
+        img.onload = function () {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width || 400;
+          canvas.height = img.height || 120;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+          resolve(canvas.toDataURL("image/png"));
+        };
+
+        img.onerror = function () {
+          resolve(null);
+        };
+
+        img.src = url;
+      });
+    })
+    .catch(() => null);
+}
+
 window.closeModal = closeModal;
 window.submitSelectedSales = submitSelectedSales;
 window.submitPasswordChange = submitPasswordChange;
