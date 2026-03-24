@@ -406,12 +406,13 @@ async function doLogin() {
     }
 
     currentUser = {
-      id: res.user.id,
-      username: res.user.username,
-      staff_name: res.user.staffName,
-      role: String(res.user.role || "").toLowerCase(),
-      temp_password: !!res.user.tempPassword
-    };
+  id: res.user.id,
+  username: res.user.username,
+  staff_name: res.user.staffName,
+  role: String(res.user.role || "").toLowerCase(),
+  branch: res.user.branch,
+  temp_password: !!res.user.tempPassword
+};
 
     if (currentUser.temp_password) {
       openChangePasswordModal();
