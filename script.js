@@ -2,6 +2,24 @@ console.log("SCRIPT LOADED SUCCESSFULLY");
 
 const API_URL = "https://api.bionixstaff.com/api";
 
+async function apiFetch(url, options = {}) {
+  const token = currentUser?.token;
+
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return fetch(url, {
+    ...options,
+    headers
+  });
+}
+
 let currentUser = null;
 let currentSalesRows = [];
 
@@ -108,7 +126,7 @@ function escapeHtml(text) {
 
 async function loadActiveStaff() {
   try {
-    const response = await fetch(`${API_URL}/Staff/active`);
+    const response = await apiFetch(`${API_URL}/Staff`);
     const res = await response.json();
 
     if (Array.isArray(res)) {
@@ -387,7 +405,7 @@ async function doLogin() {
   showMessage("loginMsg", "Checking login...");
 
   try {
-    const response = await fetch(`${API_URL}/Auth/login`, {
+    const response = await apiFetch(`${API_URL}/Auth/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -406,13 +424,14 @@ async function doLogin() {
     }
 
     currentUser = {
-  id: res.user.id,
-  username: res.user.username,
-  staff_name: res.user.staffName,
-  role: String(res.user.role || "").toLowerCase(),
-  branch: res.user.branch,
-  temp_password: !!res.user.tempPassword
-};
+      id: res.user.id,
+      username: res.user.username,
+      staff_name: res.user.staffName,
+      role: String(res.user.role || "").toLowerCase(),
+      branch: res.user.branch,
+      temp_password: !!res.user.tempPassword,
+      token: res.token
+    };
 
     if (currentUser.temp_password) {
       openChangePasswordModal();
@@ -515,7 +534,7 @@ async function submitPasswordChange() {
   }
 
   try {
-    const response = await fetch(`${API_URL}/Auth/change-password`, {
+    const response = await apiFetch(`${API_URL}/Auth/change-password`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -556,12 +575,7 @@ async function loadSales() {
   showMessage("salesMsg", "Loading sales...");
 
   try {
-    const response = await fetch(`${API_URL}/Sales?date=${encodeURIComponent(date)}`, {
-  headers: {
-    "branch": currentUser.branch,
-    "role": currentUser.role
-  }
-});
+    const response = await apiFetch(`${API_URL}/Sales?fromDate=${date}&toDate=${date}`);
     const res = await response.json();
 
     if (!res.ok) {
@@ -669,34 +683,29 @@ async function submitSelectedSales() {
   showMessage("salesMsg", "Submitting...");
 
   try {
-    const payload = {
-      staff: currentUser.staff_name,
-      date: $("staffDate").value,
-      rows: rows.map(row => ({
-        file: row.file || "",
-        patient: row.patient || "",
-        mobile: row.mobile || row.mobileNo || "",
-        treatment: row.treatment || "",
-        gross: Number(row.gross || 0)
-      }))
-    };
+    for (const row of rows) {
+      const response = await apiFetch(`${API_URL}/Sales/submit`, {
+        method: "POST",
+        body: JSON.stringify({
+          staffName: currentUser.staff_name,
+          saleDate: $("staffDate").value,
+          fileNo: row.file || "",
+          patient: row.patient || "",
+          mobileNo: row.mobile || row.mobileNo || "",
+          treatment: row.treatment || "",
+          gross: Number(row.gross || 0)
+        })
+      });
 
-    const response = await fetch(`${API_URL}/Sales/submit`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+      const res = await response.json();
 
-    const res = await response.json();
-
-    if (!res.ok) {
-      showMessage("salesMsg", res.message || "Submission failed.", "error");
-      return;
+      if (!res.ok) {
+        showMessage("salesMsg", res.message || "Submission failed.", "error");
+        return;
+      }
     }
 
-    showMessage("salesMsg", res.message || "Submitted successfully.", "success");
+    showMessage("salesMsg", "Submitted successfully.", "success");
     await loadSales();
     await loadTodaySubmissions();
   } catch (err) {
@@ -711,7 +720,7 @@ async function loadTodaySubmissions() {
   showMessage("todayMsg", "Loading today's submissions...");
 
   try {
-    const response = await fetch(`${API_URL}/Sales/today-submissions?staff=${encodeURIComponent(currentUser.staff_name)}`);
+    const response = await apiFetch(`${API_URL}/Sales/submissions`);
     const res = await response.json();
 
     if (!res.ok) {
@@ -790,7 +799,7 @@ async function submitMissingSale() {
   }
 
   try {
-    const response = await fetch(`${API_URL}/MissingSales`, {
+    const response = await apiFetch(`${API_URL}/MissingSales`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -833,7 +842,7 @@ async function loadAdminSubmissions() {
     const fromDate = $("adminFromDate") ? $("adminFromDate").value : "";
     const toDate = $("adminToDate") ? $("adminToDate").value : "";
 
-    const response = await fetch(`${API_URL}/Submissions`);
+    const response = await apiFetch(`${API_URL}/Submissions`);
     let rows = await response.json();
 
     if (!Array.isArray(rows)) rows = [];
@@ -928,7 +937,7 @@ function openEditSubmissionModal(encodedRow) {
 
 async function saveSubmissionEdit(id) {
   try {
-    const response = await fetch(`${API_URL}/Submissions/${id}`, {
+    const response = await apiFetch(`${API_URL}/Submissions/${id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json"
@@ -962,7 +971,7 @@ async function deleteSubmission(id) {
   if (!confirm("Delete this submission?")) return;
 
   try {
-    const response = await fetch(`${API_URL}/Submissions/${id}`, {
+    const response = await apiFetch(`${API_URL}/Submissions/${id}`, {
       method: "DELETE"
     });
 
@@ -1001,7 +1010,7 @@ async function loadMissingRequests() {
       ? `${API_URL}/MissingSales?${params.toString()}`
       : `${API_URL}/MissingSales`;
 
-    const response = await fetch(url);
+    const response = await apiFetch(url);
     const rows = await response.json();
 
     renderMissingRequests(Array.isArray(rows) ? rows : []);
@@ -1047,7 +1056,7 @@ async function approveMissing(id) {
   if (!confirm("Approve this missing sale?")) return;
 
   try {
-    const response = await fetch(`${API_URL}/MissingSales/${id}/approve`, {
+    const response = await apiFetch(`${API_URL}/MissingSales/${id}/approve`, {
       method: "PATCH"
     });
 
@@ -1082,7 +1091,7 @@ async function submitRejectMissing(id) {
   const note = $("rejectReason").value.trim();
 
   try {
-    const response = await fetch(`${API_URL}/MissingSales/${id}/reject`, {
+    const response = await apiFetch(`${API_URL}/MissingSales/${id}/reject`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json"
@@ -1225,7 +1234,7 @@ async function loadTasks() {
       if (assignedStaff) params.append("assignedTo", assignedStaff.id);
     }
 
-    const response = await fetch(`${API_URL}/Tasks?${params.toString()}`);
+    const response = await apiFetch(`${API_URL}/Tasks?${params.toString()}`);
     const rows = await response.json();
 
     let finalRows = Array.isArray(rows) ? rows : [];
@@ -1262,7 +1271,7 @@ async function loadMyTasks() {
   showMessage("myTaskMsg", "Loading your tasks...");
 
   try {
-    const response = await fetch(`${API_URL}/Tasks/my/${staffId}`);
+    const response = await apiFetch(`${API_URL}/Tasks/my/${staffId}`);
     const rows = await response.json();
 
     allMyTaskRows = Array.isArray(rows) ? rows : [];
@@ -1448,7 +1457,7 @@ async function createTask() {
   }
 
   try {
-    const response = await fetch(`${API_URL}/Tasks`, {
+    const response = await apiFetch(`${API_URL}/Tasks`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -1488,7 +1497,7 @@ async function createTask() {
 
 async function updateTaskStatus(rowNumber, status) {
   try {
-    const response = await fetch(`${API_URL}/Tasks/${rowNumber}/status`, {
+    const response = await apiFetch(`${API_URL}/Tasks/${rowNumber}/status`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json"
@@ -1530,8 +1539,8 @@ async function openTaskDetails(taskId) {
 
   try {
     const [taskResponse, activityResponse] = await Promise.all([
-      fetch(`${API_URL}/Tasks/${taskId}`),
-      fetch(`${API_URL}/Tasks/${taskId}/activity`)
+      apiFetch(`${API_URL}/Tasks/${taskId}`),
+      apiFetch(`${API_URL}/Tasks/${taskId}/activity`)
     ]);
 
     const task = await taskResponse.json();
@@ -1608,7 +1617,7 @@ function getStaffOptionsHtml(selectedId) {
 
 async function openEditTaskFromDetails(taskId) {
   try {
-    const response = await fetch(`${API_URL}/Tasks/${taskId}`);
+    const response = await apiFetch(`${API_URL}/Tasks/${taskId}`);
     const task = await response.json();
 
     openModal(`
@@ -1702,7 +1711,7 @@ async function saveTaskEdit(taskId) {
   }
 
   try {
-    const response = await fetch(`${API_URL}/Tasks/${taskId}`, {
+    const response = await apiFetch(`${API_URL}/Tasks/${taskId}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json"
@@ -1743,7 +1752,7 @@ async function saveTaskEdit(taskId) {
 
 async function downloadMonthlyPdf() {
   try {
-    const response = await fetch(`${API_URL}/Reports/monthly?staff=${encodeURIComponent(currentUser.staff_name)}`);
+    const response = await apiFetch(`${API_URL}/Reports/monthly`);
     const res = await response.json();
 
     if (!res.ok) {
