@@ -584,16 +584,18 @@ async function loadSales() {
 
   try {
     const response = await apiFetch(`${API_URL}/Sales?fromDate=${date}&toDate=${date}`);
-    const res = await response.json();
 
-    if (!res.ok) {
-      showMessage("salesMsg", res.message || "Failed to load sales.", "error");
+    if (!response.ok) {
+      showMessage("salesMsg", "Failed to load sales.", "error");
       if ($("salesArea")) $("salesArea").classList.add("hidden");
       return;
     }
 
-    currentSalesRows = Array.isArray(res.rows) ? res.rows : [];
+    const rows = await response.json();
+    currentSalesRows = Array.isArray(rows) ? rows : [];
+
     renderSalesTable(currentSalesRows);
+
     if ($("salesArea")) $("salesArea").classList.remove("hidden");
     showMessage("salesMsg", "");
   } catch (err) {
@@ -729,14 +731,14 @@ async function loadTodaySubmissions() {
 
   try {
     const response = await apiFetch(`${API_URL}/Sales/submissions`);
-    const res = await response.json();
 
-    if (!res.ok) {
-      showMessage("todayMsg", res.message || "Failed to load.", "error");
+    if (!response.ok) {
+      showMessage("todayMsg", "Failed to load.", "error");
       return;
     }
 
-    renderTodayTable(res.rows || []);
+    const rows = await response.json();
+    renderTodayTable(Array.isArray(rows) ? rows : []);
     showMessage("todayMsg", "");
   } catch (err) {
     console.error(err);
