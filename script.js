@@ -471,7 +471,6 @@ function showLoggedInUI() {
   }
 }
 
-
 function getTodayInputDate() {
   const d = new Date();
   const y = d.getFullYear();
