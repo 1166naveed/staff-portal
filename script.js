@@ -556,7 +556,12 @@ async function loadSales() {
   showMessage("salesMsg", "Loading sales...");
 
   try {
-    const response = await fetch(`${API_URL}/Sales?date=${encodeURIComponent(date)}`);
+    const response = await fetch(`${API_URL}/Sales?date=${encodeURIComponent(date)}`, {
+  headers: {
+    "branch": currentUser.branch,
+    "role": currentUser.role
+  }
+});
     const res = await response.json();
 
     if (!res.ok) {
