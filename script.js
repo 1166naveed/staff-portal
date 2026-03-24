@@ -81,7 +81,6 @@ document.addEventListener("DOMContentLoaded", initApp);
 function initApp() {
   bindEvents();
   initTaskAutocomplete();
-  loadActiveStaff();
   restoreSession();
 }
 
@@ -127,6 +126,13 @@ function escapeHtml(text) {
 async function loadActiveStaff() {
   try {
     const response = await apiFetch(`${API_URL}/Staff`);
+
+    if (!response.ok) {
+      activeStaffList = [];
+      activeStaffNames = [];
+      return;
+    }
+
     const res = await response.json();
 
     if (Array.isArray(res)) {
