@@ -1736,36 +1736,73 @@ async function saveTaskEdit(taskId) {
 /* ================= MONTHLY PDF ================= */
 
 async function downloadMonthlyPdf() {
-  alert("Monthly PDF is not migrated to .NET yet.");
-}
+  try {
+    const response = await fetch(`${API_URL}/Reports/monthly?staff=${encodeURIComponent(currentUser.staff_name)}`);
+    const res = await response.json();
 
-function loadLogoAsPngDataUrl(path) {
-  return fetch(path)
-    .then(r => r.text())
-    .then(svgText => {
-      return new Promise(resolve => {
-        const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(svgBlob);
-        const img = new Image();
+    if (!res.ok) {
+      alert(res.message || "Could not generate report.");
+      return;
+    }
 
-        img.onload = function () {
-          const canvas = document.createElement("canvas");
-          canvas.width = img.width || 400;
-          canvas.height = img.height || 120;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0);
-          URL.revokeObjectURL(url);
-          resolve(canvas.toDataURL("image/png"));
-        };
+    if (!res.rows || !res.rows.length) {
+      alert("No records found for the current month.");
+      return;
+    }
 
-        img.onerror = function () {
-          resolve(null);
-        };
+    const logoData = await loadLogoAsPngDataUrl("assets/logo.svg");
 
-        img.src = url;
-      });
-    })
-    .catch(() => null);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF("p", "pt", "a4");
+
+    if (logoData) {
+      doc.addImage(logoData, "PNG", 40, 30, 120, 40);
+    }
+
+    doc.setFontSize(18);
+    doc.text("Monthly Submission Report", 40, 95);
+
+    doc.setFontSize(11);
+    doc.text(`Staff: ${currentUser.staff_name}`, 40, 115);
+    doc.text(`Month: ${res.month}`, 40, 132);
+    doc.text(`Total Gross: AED ${Number(res.total_gross || 0).toFixed(2)}`, 40, 149);
+
+    const tableBody = res.rows.map(r => [
+      r.type,
+      r.date,
+      r.file,
+      r.patient || "-",
+      r.treatment,
+      `AED ${Number(r.gross).toFixed(2)}`,
+      r.timestamp
+    ]);
+
+    doc.autoTable({
+      startY: 170,
+      head: [[
+        "Type",
+        "Date",
+        "File no",
+        "Patient",
+        "Treatment",
+        "Gross",
+        "Recorded"
+      ]],
+      body: tableBody,
+      styles: {
+        fontSize: 9,
+        cellPadding: 5
+      },
+      headStyles: {
+        fillColor: [184, 155, 94]
+      }
+    });
+
+    doc.save(`monthly-report-${currentUser.staff_name}-${res.month}.pdf`);
+  } catch (err) {
+    console.error(err);
+    alert("Could not generate PDF.");
+  }
 }
 
 function openModal(html) {
