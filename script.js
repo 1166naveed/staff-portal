@@ -1270,16 +1270,16 @@ function renderFilteredAdminTasks() {
 async function loadMyTasks() {
   if (!currentUser || currentUser.role !== "staff") return;
 
-  const staffId = findCurrentUserStaffId();
-  if (!staffId) {
-    showMessage("myTaskMsg", "Could not map your staff account.", "error");
-    return;
-  }
-
   showMessage("myTaskMsg", "Loading your tasks...");
 
   try {
-    const response = await apiFetch(`${API_URL}/Tasks/my/${staffId}`);
+    const response = await apiFetch(`${API_URL}/Tasks?scope=my`);
+
+    if (!response.ok) {
+      showMessage("myTaskMsg", "Failed to load your tasks.", "error");
+      return;
+    }
+
     const rows = await response.json();
 
     allMyTaskRows = Array.isArray(rows) ? rows : [];
