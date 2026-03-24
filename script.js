@@ -459,6 +459,7 @@ function showLoggedInUI() {
     if ($("adminPage")) $("adminPage").classList.remove("hidden");
     if ($("staffPage")) $("staffPage").classList.add("hidden");
     if ($("adminWelcome")) $("adminWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
+    loadActiveStaff();
     loadAdminData();
   } else {
     if ($("staffPage")) $("staffPage").classList.remove("hidden");
@@ -469,6 +470,7 @@ function showLoggedInUI() {
     loadMyTasks();
   }
 }
+
 
 function getTodayInputDate() {
   const d = new Date();
