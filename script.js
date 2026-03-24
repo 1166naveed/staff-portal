@@ -873,21 +873,26 @@ async function loadAdminSubmissions() {
   showMessage("adminMsg", "Loading submissions...");
 
   try {
-    const res = await apiRequest({
-      action: "getAdminSubmissions",
-      singleDate: $("adminSingleDate") ? $("adminSingleDate").value : "",
-      fromDate: $("adminFromDate") ? $("adminFromDate").value : "",
-      toDate: $("adminToDate") ? $("adminToDate").value : ""
-    });
+    const singleDate = $("adminSingleDate") ? $("adminSingleDate").value : "";
+    const fromDate = $("adminFromDate") ? $("adminFromDate").value : "";
+    const toDate = $("adminToDate") ? $("adminToDate").value : "";
 
-    if (!res.ok) {
-      showMessage("adminMsg", res.message || "Failed to load submissions.", "error");
-      return;
+    const response = await fetch(`${API_URL}/Submissions`);
+    let rows = await response.json();
+
+    if (!Array.isArray(rows)) rows = [];
+
+    if (singleDate) {
+      rows = rows.filter(r => String(r.saleDate || "").slice(0, 10) === singleDate);
+    } else {
+      if (fromDate) rows = rows.filter(r => String(r.saleDate || "").slice(0, 10) >= fromDate);
+      if (toDate) rows = rows.filter(r => String(r.saleDate || "").slice(0, 10) <= toDate);
     }
 
-    renderAdminSubmissions(res.rows || []);
+    renderAdminSubmissions(rows);
     showMessage("adminMsg", "");
-  } catch {
+  } catch (err) {
+    console.error(err);
     showMessage("adminMsg", "Failed to load submissions.", "error");
   }
 }
@@ -903,21 +908,23 @@ function renderAdminSubmissions(rows) {
 
   rows.forEach(r => {
     const tr = document.createElement("tr");
+
     tr.innerHTML = `
-      <td data-label="Time">${escapeHtml(r.timestamp)}</td>
-      <td data-label="Staff">${escapeHtml(r.staff)}</td>
-      <td data-label="Sale date">${escapeHtml(r.sale_date)}</td>
-      <td data-label="File no">${escapeHtml(r.file)}</td>
-      <td data-label="Patient">${escapeHtml(r.patient)}</td>
+      <td data-label="Time">${escapeHtml(formatTaskDateTime(r.submittedAt))}</td>
+      <td data-label="Staff">${escapeHtml(r.staffName)}</td>
+      <td data-label="Sale date">${escapeHtml(formatTaskDate(r.saleDate))}</td>
+      <td data-label="File no">${escapeHtml(r.fileNo)}</td>
+      <td data-label="Patient">${escapeHtml(r.patient || "")}</td>
       <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
       <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
       <td data-label="Actions">
         <div class="table-actions">
           <button class="btn-secondary btn-small" onclick='openEditSubmissionModal(${JSON.stringify(JSON.stringify(r))})'>Edit</button>
-          <button class="btn-danger btn-small" onclick='deleteSubmission(${r.row_number})'>Delete</button>
+          <button class="btn-danger btn-small" onclick='deleteSubmission(${r.id})'>Delete</button>
         </div>
       </td>
     `;
+
     body.appendChild(tr);
   });
 }
@@ -962,23 +969,25 @@ function openEditSubmissionModal(rowJson) {
   `);
 }
 
-async function saveSubmissionEdit(rowNumber) {
-  const record = {
-    staff: $("editStaff").value.trim(),
-    sale_date: $("editSaleDate").value.trim(),
-    file: $("editFile").value.trim(),
-    patient: $("editPatient").value.trim(),
-    mobile: $("editMobile").value.trim(),
-    treatment: $("editTreatment").value.trim(),
-    gross: $("editGross").value.trim()
-  };
-
+async function saveSubmissionEdit(id) {
   try {
-    const res = await apiRequest({
-      action: "updateSubmission",
-      row_number: rowNumber,
-      record
+    const response = await fetch(`${API_URL}/Submissions/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        staffName: $("editStaff").value.trim(),
+        saleDate: $("editSaleDate").value,
+        fileNo: $("editFile").value.trim(),
+        patient: $("editPatient").value.trim(),
+        mobileNo: $("editMobile").value.trim(),
+        treatment: $("editTreatment").value.trim(),
+        gross: Number($("editGross").value)
+      })
     });
+
+    const res = await response.json();
 
     if (!res.ok) {
       alert(res.message || "Update failed.");
@@ -992,14 +1001,15 @@ async function saveSubmissionEdit(rowNumber) {
   }
 }
 
-async function deleteSubmission(rowNumber) {
+async function deleteSubmission(id) {
   if (!confirm("Delete this submission?")) return;
 
   try {
-    const res = await apiRequest({
-      action: "deleteSubmission",
-      row_number: rowNumber
+    const response = await fetch(`${API_URL}/Submissions/${id}`, {
+      method: "DELETE"
     });
+
+    const res = await response.json();
 
     if (!res.ok) {
       alert(res.message || "Delete failed.");
