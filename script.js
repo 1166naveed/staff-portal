@@ -1016,7 +1016,25 @@ async function loadMissingRequests() {
   showMessage("missingMsg", "Loading missing sale requests...");
 
   try {
-    const response = await fetch(`${API_URL}/MissingSales`);
+    const singleDate = $("adminSingleDate") ? $("adminSingleDate").value : "";
+    const fromDate = $("adminFromDate") ? $("adminFromDate").value : "";
+    const toDate = $("adminToDate") ? $("adminToDate").value : "";
+
+    const params = new URLSearchParams();
+
+    if (singleDate) {
+      params.append("fromDate", singleDate);
+      params.append("toDate", singleDate);
+    } else {
+      if (fromDate) params.append("fromDate", fromDate);
+      if (toDate) params.append("toDate", toDate);
+    }
+
+    const url = params.toString()
+      ? `${API_URL}/MissingSales?${params.toString()}`
+      : `${API_URL}/MissingSales`;
+
+    const response = await fetch(url);
     const rows = await response.json();
 
     renderMissingRequests(Array.isArray(rows) ? rows : []);
