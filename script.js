@@ -797,8 +797,20 @@ async function loadTodaySubmissions() {
     const today = getTodayInputDate();
 
     const finalRows = (Array.isArray(rows) ? rows : []).filter(r => {
-      const submittedDate = String(r.submittedAt || "").slice(0, 10);
-      return submittedDate === today;
+      const rawDate = r.submittedAt || r.createdAt;
+      if (!rawDate) return false;
+
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return false;
+
+      const localDate =
+        d.getFullYear() +
+        "-" +
+        String(d.getMonth() + 1).padStart(2, "0") +
+        "-" +
+        String(d.getDate()).padStart(2, "0");
+
+      return localDate === today;
     });
 
     renderTodayTable(finalRows);
