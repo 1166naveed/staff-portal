@@ -4,7 +4,6 @@ const API_URL = "https://api.bionixstaff.com/api";
 
 let currentUser = null;
 let currentSalesRows = [];
-let pendingDuplicateOverrideRows = [];
 
 let activeStaffList = [];
 let activeStaffNames = [];
@@ -21,7 +20,6 @@ function $(id) {
 function logout() {
   currentUser = null;
   currentSalesRows = [];
-  pendingDuplicateOverrideRows = [];
   allAdminTaskRows = [];
   allMyTaskRows = [];
   currentTaskSearch = "";
@@ -106,19 +104,6 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-}
-
-async function apiRequest(payload) {
-  const response = await fetch("https://script.google.com/macros/s/AKfycbzYwnjDR3s97mfl7TG3HSxRw1zpfy-N9DVMXsluE2o7COg9pFZq-WcQZQ1MBMQPZfPQpg/exec", {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify(payload),
-    redirect: "follow"
-  });
-
-  return await response.json();
 }
 
 async function loadActiveStaff() {
@@ -557,7 +542,7 @@ async function submitPasswordChange() {
   }
 }
 
-/* ================= SALES FROM SQL ================= */
+/* ================= SALES ================= */
 
 async function loadSales() {
   const date = $("staffDate").value;
@@ -705,7 +690,6 @@ async function submitSelectedSales() {
       return;
     }
 
-    pendingDuplicateOverrideRows = [];
     showMessage("salesMsg", res.message || "Submitted successfully.", "success");
     await loadSales();
     await loadTodaySubmissions();
@@ -713,41 +697,6 @@ async function submitSelectedSales() {
     console.error(err);
     showMessage("salesMsg", "Submission failed.", "error");
   }
-}
-
-function openDuplicateModal(duplicates) {
-  const rows = duplicates.map(d => `
-    <tr>
-      <td>File no</td>
-      <td>${escapeHtml(d.file)}</td>
-    </tr>
-    <tr>
-      <td>Patient</td>
-      <td>${escapeHtml(d.patient)}</td>
-    </tr>
-    <tr>
-      <td>Submitted by</td>
-      <td>${escapeHtml(d.submitted_by)}</td>
-    </tr>
-    <tr>
-      <td>Time</td>
-      <td>${escapeHtml(d.submitted_at)}</td>
-    </tr>
-  `).join("");
-
-  openModal(`
-    <h3>Duplicate Warning</h3>
-    <p class="modal-text">Some selected rows were already submitted.</p>
-    <div class="table-wrap compact-table">
-      <table>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="closeModal()">Close</button>
-    </div>
-  `);
 }
 
 async function loadTodaySubmissions() {
@@ -794,7 +743,7 @@ function renderTodayTable(rows) {
   });
 }
 
-/* ================= OLD GOOGLE SCRIPT PARTS STILL ACTIVE ================= */
+/* ================= ADMIN + MISSING SALES ================= */
 
 function openMissingSaleModal() {
   openModal(`
@@ -841,13 +790,13 @@ async function submitMissingSale() {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-  staffName: currentUser.staff_name,
-  fileNo: file,
-  paymentDate: paymentDate,
-  treatment: treatment,
-  gross: Number(gross),
-  adminNote: ""
-})
+        staffName: currentUser.staff_name,
+        fileNo: file,
+        paymentDate: paymentDate,
+        treatment: treatment,
+        gross: Number(gross),
+        adminNote: ""
+      })
     });
 
     const res = await response.json();
@@ -863,6 +812,7 @@ async function submitMissingSale() {
     alert("Could not submit missing sale request.");
   }
 }
+
 async function loadAdminData() {
   await loadAdminSubmissions();
   await loadMissingRequests();
@@ -907,20 +857,21 @@ function renderAdminSubmissions(rows) {
   }
 
   rows.forEach(r => {
+    const safeRow = encodeURIComponent(JSON.stringify(r));
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
       <td data-label="Time">${escapeHtml(formatTaskDateTime(r.submittedAt))}</td>
-      <td data-label="Staff">${escapeHtml(r.staffName)}</td>
+      <td data-label="Staff">${escapeHtml(r.staffName || "")}</td>
       <td data-label="Sale date">${escapeHtml(formatTaskDate(r.saleDate))}</td>
-      <td data-label="File no">${escapeHtml(r.fileNo)}</td>
+      <td data-label="File no">${escapeHtml(r.fileNo || "")}</td>
       <td data-label="Patient">${escapeHtml(r.patient || "")}</td>
-      <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
-      <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
+      <td data-label="Treatment">${escapeHtml(r.treatment || "")}</td>
+      <td data-label="Gross">AED ${Number(r.gross || 0).toFixed(2)}</td>
       <td data-label="Actions">
         <div class="table-actions">
-          <button class="btn-secondary btn-small" onclick='openEditSubmissionModal(${JSON.stringify(JSON.stringify(r))})'>Edit</button>
-          <button class="btn-danger btn-small" onclick='deleteSubmission(${r.id})'>Delete</button>
+          <button class="btn-secondary btn-small" onclick="openEditSubmissionModal('${safeRow}')">Edit</button>
+          <button class="btn-danger btn-small" onclick="deleteSubmission(${r.id})">Delete</button>
         </div>
       </td>
     `;
@@ -929,42 +880,42 @@ function renderAdminSubmissions(rows) {
   });
 }
 
-function openEditSubmissionModal(rowJson) {
-  const row = JSON.parse(rowJson);
+function openEditSubmissionModal(encodedRow) {
+  const row = JSON.parse(decodeURIComponent(encodedRow));
 
   openModal(`
     <h3>Edit Submission</h3>
     <div class="form-group">
       <label>Staff name</label>
-      <input type="text" id="editStaff" value="${escapeHtml(row.staff)}">
+      <input type="text" id="editStaff" value="${escapeHtml(row.staffName || "")}">
     </div>
     <div class="form-group">
       <label>Sale date</label>
-      <input type="date" id="editSaleDate" value="${escapeHtml(row.sale_date)}">
+      <input type="date" id="editSaleDate" value="${escapeHtml(String(row.saleDate || "").slice(0, 10))}">
     </div>
     <div class="form-group">
       <label>File no</label>
-      <input type="text" id="editFile" value="${escapeHtml(row.file)}">
+      <input type="text" id="editFile" value="${escapeHtml(row.fileNo || "")}">
     </div>
     <div class="form-group">
       <label>Patient</label>
-      <input type="text" id="editPatient" value="${escapeHtml(row.patient)}">
+      <input type="text" id="editPatient" value="${escapeHtml(row.patient || "")}">
     </div>
     <div class="form-group">
       <label>Mobile</label>
-      <input type="text" id="editMobile" value="${escapeHtml(row.mobile || "")}">
+      <input type="text" id="editMobile" value="${escapeHtml(row.mobileNo || "")}">
     </div>
     <div class="form-group">
       <label>Treatment</label>
-      <textarea id="editTreatment">${escapeHtml(row.treatment)}</textarea>
+      <textarea id="editTreatment">${escapeHtml(row.treatment || "")}</textarea>
     </div>
     <div class="form-group">
       <label>Gross</label>
-      <input type="number" id="editGross" value="${Number(row.gross)}">
+      <input type="number" id="editGross" value="${Number(row.gross || 0)}">
     </div>
     <div class="modal-actions">
       <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button onclick="saveSubmissionEdit(${row.row_number})">Save</button>
+      <button onclick="saveSubmissionEdit(${row.id})">Save</button>
     </div>
   `);
 }
@@ -1107,7 +1058,7 @@ async function approveMissing(id) {
   }
 }
 
-function openRejectMissingModal(rowNumber) {
+function openRejectMissingModal(id) {
   openModal(`
     <h3>Reject Missing Sale</h3>
     <div class="form-group">
@@ -1116,7 +1067,7 @@ function openRejectMissingModal(rowNumber) {
     </div>
     <div class="modal-actions">
       <button class="btn-light" onclick="closeModal()">Cancel</button>
-      <button class="btn-danger" onclick="submitRejectMissing(${rowNumber})">Reject</button>
+      <button class="btn-danger" onclick="submitRejectMissing(${id})">Reject</button>
     </div>
   `);
 }
@@ -1782,75 +1733,10 @@ async function saveTaskEdit(taskId) {
   }
 }
 
+/* ================= MONTHLY PDF ================= */
+
 async function downloadMonthlyPdf() {
-  try {
-    const res = await apiRequest({
-      action: "getMonthlyReport",
-      staff: currentUser.staff_name
-    });
-
-    if (!res.ok) {
-      alert(res.message || "Could not generate report.");
-      return;
-    }
-
-    if (!res.rows || !res.rows.length) {
-      alert("No records found for the current month.");
-      return;
-    }
-
-    const logoData = await loadLogoAsPngDataUrl("assets/logo.svg");
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF("p", "pt", "a4");
-
-    if (logoData) {
-      doc.addImage(logoData, "PNG", 40, 30, 120, 40);
-    }
-
-    doc.setFontSize(18);
-    doc.text("Monthly Submission Report", 40, 95);
-
-    doc.setFontSize(11);
-    doc.text(`Staff: ${currentUser.staff_name}`, 40, 115);
-    doc.text(`Month: ${res.month}`, 40, 132);
-    doc.text(`Total Gross: AED ${Number(res.total_gross || 0).toFixed(2)}`, 40, 149);
-
-    const tableBody = res.rows.map(r => [
-      r.type,
-      r.date,
-      r.file,
-      r.patient || "-",
-      r.treatment,
-      `AED ${Number(r.gross).toFixed(2)}`,
-      r.timestamp
-    ]);
-
-    doc.autoTable({
-      startY: 170,
-      head: [[
-        "Type",
-        "Date",
-        "File no",
-        "Patient",
-        "Treatment",
-        "Gross",
-        "Recorded"
-      ]],
-      body: tableBody,
-      styles: {
-        fontSize: 9,
-        cellPadding: 5
-      },
-      headStyles: {
-        fillColor: [184, 155, 94]
-      }
-    });
-
-    doc.save(`monthly-report-${currentUser.staff_name}-${res.month}.pdf`);
-  } catch {
-    alert("Could not generate PDF.");
-  }
+  alert("Monthly PDF is not migrated to .NET yet.");
 }
 
 function loadLogoAsPngDataUrl(path) {
