@@ -715,7 +715,7 @@ function renderSalesTable(rows) {
       <td data-label="Select"><input type="checkbox" class="sale-check" data-index="${index}"></td>
       <td data-label="File no">
         <div>${escapeHtml(row.fileNo || "")}</div>
-        <div class="small-note">Staff: ${escapeHtml(currentUser?.staff_name || "")}</div>
+        <div class="small-note">Submitted by ${escapeHtml(currentUser?.staff_name || "")}</div>
       </td>
       <td data-label="Patient">${escapeHtml(row.patient || "")}</td>
       <td data-label="Treatment">${escapeHtml(row.treatment || "")}</td>
@@ -866,7 +866,7 @@ function renderTodayTable(rows) {
   body.innerHTML = "";
 
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="5">No submissions today.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6">No submissions today.</td></tr>`;
     return;
   }
 
@@ -876,12 +876,10 @@ function renderTodayTable(rows) {
 
     tr.innerHTML = `
       <td data-label="Time">${escapeHtml(submittedWhen)}</td>
+      <td data-label="Sale Date">${escapeHtml(formatTaskDate(r.saleDate))}</td>
       <td data-label="File no">${escapeHtml(r.fileNo || "")}</td>
       <td data-label="Patient">${escapeHtml(r.patient || "")}</td>
-      <td data-label="Treatment">
-        <div>${escapeHtml(r.treatment || "")}</div>
-        <div class="small-note">Sale date: ${escapeHtml(formatTaskDate(r.saleDate))}</div>
-      </td>
+      <td data-label="Treatment">${escapeHtml(r.treatment || "")}</td>
       <td data-label="Gross">AED ${Number(r.gross || 0).toFixed(2)}</td>
     `;
     body.appendChild(tr);
