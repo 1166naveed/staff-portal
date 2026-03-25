@@ -17,47 +17,9 @@ function $(id) {
   return document.getElementById(id);
 }
 
-async function apiFetch(url, options = {}) {
-  const headers = {
-    ...(options.headers || {})
-  };
-
-  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  if (currentUser?.token) {
-    headers["Authorization"] = `Bearer ${currentUser.token}`;
-  }
-
-  return fetch(url, {
-    cache: "no-store",
-    ...options,
-    headers
-  });
-}
-
-async function safeReadJson(response) {
-  const text = await response.text();
-  if (!text) return null;
-
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    console.error("JSON parse failed:", text);
-    throw err;
-  }
-}
-
-function isAdminUser() {
-  return String(currentUser?.role || "").toLowerCase() === "admin";
-}
-
 function logout() {
   currentUser = null;
   currentSalesRows = [];
-  activeStaffList = [];
-  activeStaffNames = [];
   allAdminTaskRows = [];
   allMyTaskRows = [];
   currentTaskSearch = "";
@@ -101,6 +63,7 @@ document.addEventListener("DOMContentLoaded", initApp);
 function initApp() {
   bindEvents();
   initTaskAutocomplete();
+  loadActiveStaff();
   restoreSession();
 }
 
@@ -143,106 +106,16 @@ function escapeHtml(text) {
     .replace(/'/g, "&#039;");
 }
 
-function getTodayInputDate() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function getDubaiTodayInputDate() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Dubai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(new Date());
-}
-
-function getDateYmdInDubai(value) {
-  if (!value) return "";
-
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return "";
-
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Dubai",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(d);
-}
-
-function formatTaskDate(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
-}
-
-function formatTaskDateTime(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const year = d.getFullYear();
-  const time = d.toLocaleString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true
-  });
-
-  return `${day}-${month}-${year} ${time}`;
-}
-
-function formatDubaiDateTime(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-
-  const datePart = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Dubai",
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
-  }).format(d);
-
-  const timePart = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Dubai",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true
-  }).format(d);
-
-  return `${datePart} ${timePart}`;
-}
-
 async function loadActiveStaff() {
   try {
-    const response = await apiFetch(`${API_URL}/Staff`);
-
-    if (!response.ok) {
-      activeStaffList = [];
-      activeStaffNames = [];
-      return;
-    }
-
-    const res = await safeReadJson(response);
+    const response = await fetch(`${API_URL}/Staff/active`);
+    const res = await response.json();
 
     if (Array.isArray(res)) {
       activeStaffList = res.map(x => ({
         id: x.id,
         staffName: x.staffName,
-        username: x.username,
-        role: x.role,
-        branch: x.branch
+        role: x.role
       }));
 
       activeStaffNames = activeStaffList.map(x => x.staffName).filter(Boolean);
@@ -261,16 +134,7 @@ async function loadActiveStaff() {
 function findActiveStaffByName(name) {
   const clean = String(name || "").trim().toLowerCase();
   if (!clean) return null;
-
-  return activeStaffList.find(x =>
-    String(x.staffName || "").trim().toLowerCase() === clean
-  ) || null;
-}
-
-function findActiveStaffById(id) {
-  const num = Number(id);
-  if (!num) return null;
-  return activeStaffList.find(x => Number(x.id) === num) || null;
+  return activeStaffList.find(x => String(x.staffName || "").trim().toLowerCase() === clean) || null;
 }
 
 function findCurrentUserStaffId() {
@@ -461,7 +325,6 @@ function initTaskAutocomplete() {
 
   validateTaskAssignSelection = function () {
     if (!assignInput || !assignHidden) return true;
-
     const exact = findExactActiveStaffName(assignInput.value);
     if (exact) {
       assignHidden.value = exact;
@@ -469,20 +332,17 @@ function initTaskAutocomplete() {
       if ($("taskAssignError")) $("taskAssignError").classList.add("hidden");
       return true;
     }
-
     if (String(assignInput.value || "").trim()) {
       assignInput.classList.add("invalid");
       if ($("taskAssignError")) $("taskAssignError").classList.remove("hidden");
       assignHidden.value = "";
       return false;
     }
-
     return true;
   };
 
   validateTaskAssignedFilterSelection = function () {
     if (!filterInput || !filterHidden) return true;
-
     const raw = String(filterInput.value || "").trim();
     if (!raw) {
       filterHidden.value = "";
@@ -490,7 +350,6 @@ function initTaskAutocomplete() {
       if ($("taskAssignedError")) $("taskAssignedError").classList.add("hidden");
       return true;
     }
-
     const exact = findExactActiveStaffName(raw);
     if (exact) {
       filterHidden.value = exact;
@@ -498,7 +357,6 @@ function initTaskAutocomplete() {
       if ($("taskAssignedError")) $("taskAssignedError").classList.add("hidden");
       return true;
     }
-
     filterInput.classList.add("invalid");
     if ($("taskAssignedError")) $("taskAssignedError").classList.remove("hidden");
     filterHidden.value = "";
@@ -516,17 +374,9 @@ function restoreSession() {
 
   try {
     currentUser = JSON.parse(saved);
-
-    if (!currentUser?.token) {
-      localStorage.removeItem("staffPortalUser");
-      currentUser = null;
-      return;
-    }
-
     showLoggedInUI();
   } catch {
     localStorage.removeItem("staffPortalUser");
-    currentUser = null;
   }
 }
 
@@ -543,27 +393,26 @@ async function doLogin() {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        username,
-        password
+        username: username,
+        password: password
       })
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!res || !res.ok) {
-      showMessage("loginMsg", (res && res.message) || "Login failed.", "error");
+    if (!res.ok) {
+      showMessage("loginMsg", res.message || "Login failed.", "error");
       return;
     }
 
     currentUser = {
-      id: res.user.id,
-      username: res.user.username,
-      staff_name: res.user.staffName,
-      role: String(res.user.role || "").toLowerCase(),
-      branch: res.user.branch,
-      temp_password: !!res.user.tempPassword,
-      token: res.token
-    };
+  id: res.user.id,
+  username: res.user.username,
+  staff_name: res.user.staffName,
+  role: String(res.user.role || "").toLowerCase(),
+  branch: res.user.branch,
+  temp_password: !!res.user.tempPassword
+};
 
     if (currentUser.temp_password) {
       openChangePasswordModal();
@@ -578,25 +427,58 @@ async function doLogin() {
   }
 }
 
-async function showLoggedInUI() {
+function showLoggedInUI() {
   if ($("loginPage")) $("loginPage").classList.add("hidden");
 
-  if (isAdminUser()) {
+  if (currentUser.role === "admin") {
     if ($("adminPage")) $("adminPage").classList.remove("hidden");
     if ($("staffPage")) $("staffPage").classList.add("hidden");
     if ($("adminWelcome")) $("adminWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
-
-    await loadActiveStaff();
-    await loadAdminData();
+    loadAdminData();
   } else {
     if ($("staffPage")) $("staffPage").classList.remove("hidden");
     if ($("adminPage")) $("adminPage").classList.add("hidden");
     if ($("staffWelcome")) $("staffWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
-    if ($("staffDate")) $("staffDate").value = getDubaiTodayInputDate();
-
-    await loadTodaySubmissions();
-    await loadMyTasks();
+    if ($("staffDate")) $("staffDate").value = getTodayInputDate();
+    loadTodaySubmissions();
+    loadMyTasks();
   }
+}
+
+function getTodayInputDate() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatTaskDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = d.toLocaleString("en-US", { month: "short" });
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+function formatTaskDateTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = d.toLocaleString("en-US", { month: "short" });
+  const year = d.getFullYear();
+  const time = d.toLocaleString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+
+  return `${day}-${month}-${year} ${time}`;
 }
 
 function openChangePasswordModal() {
@@ -633,25 +515,28 @@ async function submitPasswordChange() {
   }
 
   try {
-    const response = await apiFetch(`${API_URL}/Auth/change-password`, {
+    const response = await fetch(`${API_URL}/Auth/change-password`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         username: currentUser.username,
         newPassword: p1
       })
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!response.ok || !res || !res.ok) {
-      alert((res && res.message) || "Password change failed.");
+    if (!res.ok) {
+      alert(res.message || "Password change failed.");
       return;
     }
 
     currentUser.temp_password = false;
     persistSession(currentUser);
     closeModal();
-    await showLoggedInUI();
+    showLoggedInUI();
   } catch (err) {
     console.error(err);
     alert("Password change failed.");
@@ -671,19 +556,21 @@ async function loadSales() {
   showMessage("salesMsg", "Loading sales...");
 
   try {
-    const response = await apiFetch(`${API_URL}/Sales?fromDate=${encodeURIComponent(date)}&toDate=${encodeURIComponent(date)}`);
+    const response = await fetch(`${API_URL}/Sales?date=${encodeURIComponent(date)}`, {
+  headers: {
+    "branch": currentUser.branch,
+    "role": currentUser.role
+  }
+});
+    const res = await response.json();
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Sales load failed:", errorText);
-      showMessage("salesMsg", "Failed to load sales.", "error");
+    if (!res.ok) {
+      showMessage("salesMsg", res.message || "Failed to load sales.", "error");
       if ($("salesArea")) $("salesArea").classList.add("hidden");
       return;
     }
 
-    const rows = await safeReadJson(response);
-    currentSalesRows = Array.isArray(rows) ? rows : [];
-
+    currentSalesRows = Array.isArray(res.rows) ? res.rows : [];
     renderSalesTable(currentSalesRows);
     if ($("salesArea")) $("salesArea").classList.remove("hidden");
     showMessage("salesMsg", "");
@@ -695,13 +582,11 @@ async function loadSales() {
 
 function renderSalesTable(rows) {
   const body = $("salesTableBody");
-  if (!body) return;
-
   body.innerHTML = "";
 
-  if ($("rowsFound")) $("rowsFound").textContent = rows.length;
-  if ($("selectedCount")) $("selectedCount").textContent = "0";
-  if ($("selectedGross")) $("selectedGross").textContent = "0.00";
+  $("rowsFound").textContent = rows.length;
+  $("selectedCount").textContent = "0";
+  $("selectedGross").textContent = "0.00";
 
   if (!rows.length) {
     body.innerHTML = `<tr><td colspan="5">No sales found for selected date.</td></tr>`;
@@ -710,18 +595,19 @@ function renderSalesTable(rows) {
 
   rows.forEach((row, index) => {
     const tr = document.createElement("tr");
+    if (row.is_submitted) tr.classList.add("submitted-row");
+
+    const note = row.is_submitted
+      ? `<span class="small-note">Submitted by ${escapeHtml(row.submitted_by)}</span>`
+      : "";
 
     tr.innerHTML = `
       <td data-label="Select"><input type="checkbox" class="sale-check" data-index="${index}"></td>
-      <td data-label="File no">
-        <div>${escapeHtml(row.fileNo || "")}</div>
-        <div class="small-note">Submitted by ${escapeHtml(currentUser?.staff_name || "")}</div>
-      </td>
-      <td data-label="Patient">${escapeHtml(row.patient || "")}</td>
-      <td data-label="Treatment">${escapeHtml(row.treatment || "")}</td>
-      <td data-label="Gross">AED ${Number(row.gross || 0).toFixed(2)}</td>
+      <td data-label="File no">${escapeHtml(row.file)}</td>
+      <td data-label="Patient">${escapeHtml(row.patient)}${note}</td>
+      <td data-label="Treatment">${escapeHtml(row.treatment)}</td>
+      <td data-label="Gross">AED ${Number(row.gross).toFixed(2)}</td>
     `;
-
     body.appendChild(tr);
   });
 
@@ -745,8 +631,8 @@ function updateSelectedSummary() {
   const selected = getSelectedRows();
   const total = selected.reduce((sum, row) => sum + Number(row.gross || 0), 0);
 
-  if ($("selectedCount")) $("selectedCount").textContent = selected.length;
-  if ($("selectedGross")) $("selectedGross").textContent = total.toFixed(2);
+  $("selectedCount").textContent = selected.length;
+  $("selectedGross").textContent = total.toFixed(2);
 }
 
 function openSubmitConfirm() {
@@ -782,43 +668,35 @@ async function submitSelectedSales() {
 
   showMessage("salesMsg", "Submitting...");
 
-  let successCount = 0;
-  let failedCount = 0;
-  let lastError = "";
-
   try {
-    for (const row of rows) {
-      const response = await apiFetch(`${API_URL}/Sales/submit`, {
-        method: "POST",
-        body: JSON.stringify({
-          staffName: currentUser.staff_name,
-          saleDate: $("staffDate").value,
-          fileNo: row.fileNo || "",
-          patient: row.patient || "",
-          mobileNo: row.mobileNo || "",
-          treatment: row.treatment || "",
-          gross: Number(row.gross || 0)
-        })
-      });
+    const payload = {
+      staff: currentUser.staff_name,
+      date: $("staffDate").value,
+      rows: rows.map(row => ({
+        file: row.file || "",
+        patient: row.patient || "",
+        mobile: row.mobile || row.mobileNo || "",
+        treatment: row.treatment || "",
+        gross: Number(row.gross || 0)
+      }))
+    };
 
-      const res = await safeReadJson(response);
+    const response = await fetch(`${API_URL}/Sales/submit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
 
-      if (response.ok && res && res.ok) {
-        successCount += 1;
-      } else {
-        failedCount += 1;
-        lastError = (res && res.message) || "Submission failed.";
-      }
+    const res = await response.json();
+
+    if (!res.ok) {
+      showMessage("salesMsg", res.message || "Submission failed.", "error");
+      return;
     }
 
-    if (successCount > 0 && failedCount === 0) {
-      showMessage("salesMsg", `${successCount} sale(s) submitted successfully by ${currentUser.staff_name}.`, "success");
-    } else if (successCount > 0 && failedCount > 0) {
-      showMessage("salesMsg", `${successCount} sale(s) submitted, ${failedCount} failed. ${lastError}`, "error");
-    } else {
-      showMessage("salesMsg", lastError || "Submission failed.", "error");
-    }
-
+    showMessage("salesMsg", res.message || "Submitted successfully.", "success");
     await loadSales();
     await loadTodaySubmissions();
   } catch (err) {
@@ -828,30 +706,20 @@ async function submitSelectedSales() {
 }
 
 async function loadTodaySubmissions() {
-  if (!currentUser || isAdminUser()) return;
+  if (!currentUser || currentUser.role !== "staff") return;
 
   showMessage("todayMsg", "Loading today's submissions...");
 
   try {
-    const response = await apiFetch(`${API_URL}/Sales/submissions`);
+    const response = await fetch(`${API_URL}/Sales/today-submissions?staff=${encodeURIComponent(currentUser.staff_name)}`);
+    const res = await response.json();
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Today submissions load failed:", errorText);
-      showMessage("todayMsg", "Failed to load.", "error");
+    if (!res.ok) {
+      showMessage("todayMsg", res.message || "Failed to load.", "error");
       return;
     }
 
-    const rows = await safeReadJson(response);
-    const todayDubai = getDubaiTodayInputDate();
-
-    const finalRows = (Array.isArray(rows) ? rows : []).filter(r => {
-      const rawDate = r.submittedAt || r.createdAt;
-      const submittedDubaiDate = getDateYmdInDubai(rawDate);
-      return submittedDubaiDate === todayDubai;
-    });
-
-    renderTodayTable(finalRows);
+    renderTodayTable(res.rows || []);
     showMessage("todayMsg", "");
   } catch (err) {
     console.error(err);
@@ -861,26 +729,21 @@ async function loadTodaySubmissions() {
 
 function renderTodayTable(rows) {
   const body = $("todayTableBody");
-  if (!body) return;
-
   body.innerHTML = "";
 
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="6">No submissions today.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5">No submissions today.</td></tr>`;
     return;
   }
 
   rows.forEach(r => {
     const tr = document.createElement("tr");
-    const submittedWhen = formatDubaiDateTime(r.submittedAt || r.createdAt);
-
     tr.innerHTML = `
-      <td data-label="Time">${escapeHtml(submittedWhen)}</td>
-      <td data-label="Sale Date">${escapeHtml(formatTaskDate(r.saleDate))}</td>
-      <td data-label="File no">${escapeHtml(r.fileNo || "")}</td>
-      <td data-label="Patient">${escapeHtml(r.patient || "")}</td>
-      <td data-label="Treatment">${escapeHtml(r.treatment || "")}</td>
-      <td data-label="Gross">AED ${Number(r.gross || 0).toFixed(2)}</td>
+      <td data-label="Time">${escapeHtml(r.time)}</td>
+      <td data-label="File no">${escapeHtml(r.file)}</td>
+      <td data-label="Patient">${escapeHtml(r.patient)}</td>
+      <td data-label="Treatment">${escapeHtml(r.treatment)}</td>
+      <td data-label="Gross">AED ${Number(r.gross).toFixed(2)}</td>
     `;
     body.appendChild(tr);
   });
@@ -927,29 +790,31 @@ async function submitMissingSale() {
   }
 
   try {
-    const response = await apiFetch(`${API_URL}/MissingSales`, {
+    const response = await fetch(`${API_URL}/MissingSales`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         staffName: currentUser.staff_name,
         fileNo: file,
-        paymentDate,
-        treatment,
+        paymentDate: paymentDate,
+        treatment: treatment,
         gross: Number(gross),
         adminNote: ""
       })
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!response.ok || !res || !res.ok) {
-      alert((res && res.message) || "Could not submit missing sale request.");
+    if (!res.ok) {
+      alert(res.message || "Could not submit missing sale request.");
       return;
     }
 
     closeModal();
     alert("Missing sale request sent to admin.");
-  } catch (err) {
-    console.error(err);
+  } catch {
     alert("Could not submit missing sale request.");
   }
 }
@@ -968,16 +833,9 @@ async function loadAdminSubmissions() {
     const fromDate = $("adminFromDate") ? $("adminFromDate").value : "";
     const toDate = $("adminToDate") ? $("adminToDate").value : "";
 
-    const response = await apiFetch(`${API_URL}/Submissions`);
+    const response = await fetch(`${API_URL}/Submissions`);
+    let rows = await response.json();
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Admin submissions load failed:", errorText);
-      showMessage("adminMsg", "Failed to load submissions.", "error");
-      return;
-    }
-
-    let rows = await safeReadJson(response);
     if (!Array.isArray(rows)) rows = [];
 
     if (singleDate) {
@@ -997,8 +855,6 @@ async function loadAdminSubmissions() {
 
 function renderAdminSubmissions(rows) {
   const body = $("adminTableBody");
-  if (!body) return;
-
   body.innerHTML = "";
 
   if (!rows.length) {
@@ -1072,8 +928,11 @@ function openEditSubmissionModal(encodedRow) {
 
 async function saveSubmissionEdit(id) {
   try {
-    const response = await apiFetch(`${API_URL}/Submissions/${id}`, {
+    const response = await fetch(`${API_URL}/Submissions/${id}`, {
       method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         staffName: $("editStaff").value.trim(),
         saleDate: $("editSaleDate").value,
@@ -1085,17 +944,16 @@ async function saveSubmissionEdit(id) {
       })
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!response.ok || !res || !res.ok) {
-      alert((res && res.message) || "Update failed.");
+    if (!res.ok) {
+      alert(res.message || "Update failed.");
       return;
     }
 
     closeModal();
-    await loadAdminSubmissions();
-  } catch (err) {
-    console.error(err);
+    loadAdminSubmissions();
+  } catch {
     alert("Update failed.");
   }
 }
@@ -1104,27 +962,24 @@ async function deleteSubmission(id) {
   if (!confirm("Delete this submission?")) return;
 
   try {
-    const response = await apiFetch(`${API_URL}/Submissions/${id}`, {
+    const response = await fetch(`${API_URL}/Submissions/${id}`, {
       method: "DELETE"
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!response.ok || !res || !res.ok) {
-      alert((res && res.message) || "Delete failed.");
+    if (!res.ok) {
+      alert(res.message || "Delete failed.");
       return;
     }
 
-    await loadAdminSubmissions();
-  } catch (err) {
-    console.error(err);
+    loadAdminSubmissions();
+  } catch {
     alert("Delete failed.");
   }
 }
 
 async function loadMissingRequests() {
-  if (!isAdminUser()) return;
-
   showMessage("missingMsg", "Loading missing sale requests...");
 
   try {
@@ -1146,16 +1001,8 @@ async function loadMissingRequests() {
       ? `${API_URL}/MissingSales?${params.toString()}`
       : `${API_URL}/MissingSales`;
 
-    const response = await apiFetch(url);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("MissingSales error:", errorText);
-      showMessage("missingMsg", "Failed to load missing sale requests.", "error");
-      return;
-    }
-
-    const rows = await safeReadJson(response);
+    const response = await fetch(url);
+    const rows = await response.json();
 
     renderMissingRequests(Array.isArray(rows) ? rows : []);
     showMessage("missingMsg", "");
@@ -1167,8 +1014,6 @@ async function loadMissingRequests() {
 
 function renderMissingRequests(rows) {
   const body = $("missingTableBody");
-  if (!body) return;
-
   body.innerHTML = "";
 
   if (!rows.length) {
@@ -1177,9 +1022,7 @@ function renderMissingRequests(rows) {
   }
 
   rows.forEach(r => {
-    const status = String(r.status || "");
     const tr = document.createElement("tr");
-
     tr.innerHTML = `
       <td data-label="Requested">${escapeHtml(formatTaskDateTime(r.createdAt))}</td>
       <td data-label="Staff">${escapeHtml(r.staffName || "")}</td>
@@ -1187,16 +1030,15 @@ function renderMissingRequests(rows) {
       <td data-label="Payment date">${escapeHtml(formatTaskDate(r.paymentDate))}</td>
       <td data-label="Treatment">${escapeHtml(r.treatment || "")}</td>
       <td data-label="Gross">AED ${Number(r.gross || 0).toFixed(2)}</td>
-      <td data-label="Status">${escapeHtml(status)}</td>
+      <td data-label="Status">${escapeHtml(r.status || "")}</td>
       <td data-label="Admin note">${escapeHtml(r.adminNote || "")}</td>
       <td data-label="Actions">
         <div class="table-actions">
-          <button class="btn-secondary btn-small" onclick='approveMissing(${r.id})' ${status !== "Pending" ? "disabled" : ""}>Approve</button>
-          <button class="btn-danger btn-small" onclick='openRejectMissingModal(${r.id})' ${status !== "Pending" ? "disabled" : ""}>Reject</button>
+          <button class="btn-secondary btn-small" onclick='approveMissing(${r.id})' ${r.status !== "Pending" ? "disabled" : ""}>Approve</button>
+          <button class="btn-danger btn-small" onclick='openRejectMissingModal(${r.id})' ${r.status !== "Pending" ? "disabled" : ""}>Reject</button>
         </div>
       </td>
     `;
-
     body.appendChild(tr);
   });
 }
@@ -1205,20 +1047,19 @@ async function approveMissing(id) {
   if (!confirm("Approve this missing sale?")) return;
 
   try {
-    const response = await apiFetch(`${API_URL}/MissingSales/${id}/approve`, {
+    const response = await fetch(`${API_URL}/MissingSales/${id}/approve`, {
       method: "PATCH"
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!response.ok || !res || !res.ok) {
-      alert((res && res.message) || "Approval failed.");
+    if (!res.ok) {
+      alert(res.message || "Approval failed.");
       return;
     }
 
-    await loadMissingRequests();
-  } catch (err) {
-    console.error(err);
+    loadMissingRequests();
+  } catch {
     alert("Approval failed.");
   }
 }
@@ -1241,50 +1082,29 @@ async function submitRejectMissing(id) {
   const note = $("rejectReason").value.trim();
 
   try {
-    const response = await apiFetch(`${API_URL}/MissingSales/${id}/reject`, {
+    const response = await fetch(`${API_URL}/MissingSales/${id}/reject`, {
       method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify(note)
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!response.ok || !res || !res.ok) {
-      alert((res && res.message) || "Rejection failed.");
+    if (!res.ok) {
+      alert(res.message || "Rejection failed.");
       return;
     }
 
     closeModal();
-    await loadMissingRequests();
-  } catch (err) {
-    console.error(err);
+    loadMissingRequests();
+  } catch {
     alert("Rejection failed.");
   }
 }
 
 /* ================= TASKS ================= */
-
-function enrichTaskRows(rows) {
-  return (rows || []).map(row => {
-    const assignedStaff = findActiveStaffById(row.assignedTo);
-    const createdByStaff = findActiveStaffById(row.createdBy);
-
-    return {
-      ...row,
-      assignedToName: row.assignedToName || (assignedStaff ? assignedStaff.staffName : ""),
-      createdByName: row.createdByName || (createdByStaff ? createdByStaff.staffName : "")
-    };
-  });
-}
-
-function enrichTaskLogs(rows) {
-  return (rows || []).map(row => {
-    const actionByStaff = findActiveStaffById(row.actionBy);
-    return {
-      ...row,
-      actionByName: row.actionByName || (actionByStaff ? actionByStaff.staffName : "")
-    };
-  });
-}
 
 function taskMatchesSearch(row, searchTerm) {
   if (!searchTerm) return true;
@@ -1293,6 +1113,7 @@ function taskMatchesSearch(row, searchTerm) {
     row.title,
     row.description,
     row.assignedToName,
+    row.assigned_to_name,
     row.branch,
     row.priority,
     row.status
@@ -1314,16 +1135,10 @@ function getTaskCounts(rows) {
 
   rows.forEach(r => {
     const status = String(r.status || "").toLowerCase();
-    const due = r.dueDate ? new Date(r.dueDate) : null;
-    const isOverdue = due && !isNaN(due.getTime()) &&
-      due < new Date() &&
-      status !== "completed" &&
-      status !== "cancelled";
-
-    if (status === "open" || status === "new") counts.new += 1;
+    if (status === "new") counts.new += 1;
     if (status === "in progress") counts.inProgress += 1;
     if (status === "completed") counts.completed += 1;
-    if (isOverdue || status === "overdue") counts.overdue += 1;
+    if (status === "overdue") counts.overdue += 1;
   });
 
   return counts;
@@ -1364,6 +1179,7 @@ function renderTaskAlertBox(rows, targetId, isMine = false) {
   if (!wrap) return;
 
   const counts = getTaskCounts(rows);
+
   let html = "";
 
   if (counts.overdue > 0) {
@@ -1378,8 +1194,6 @@ function renderTaskAlertBox(rows, targetId, isMine = false) {
 }
 
 async function loadTasks() {
-  if (!isAdminUser()) return;
-
   showMessage("taskMsg", "Loading tasks...");
 
   try {
@@ -1396,10 +1210,14 @@ async function loadTasks() {
 
     if (status && status !== "All" && status !== "Overdue") {
       params.append("status", status);
+    } else {
+      params.append("status", "All");
     }
 
     if (branch && branch !== "All") {
       params.append("branch", branch);
+    } else {
+      params.append("branch", "All");
     }
 
     if (assignedName) {
@@ -1407,31 +1225,16 @@ async function loadTasks() {
       if (assignedStaff) params.append("assignedTo", assignedStaff.id);
     }
 
-    const query = params.toString() ? `?${params.toString()}` : "";
-    const response = await apiFetch(`${API_URL}/Tasks${query}`);
+    const response = await fetch(`${API_URL}/Tasks?${params.toString()}`);
+    const rows = await response.json();
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Tasks load failed:", errorText);
-      showMessage("taskMsg", "Failed to load tasks.", "error");
-      return;
-    }
-
-    let rows = await safeReadJson(response);
-    rows = enrichTaskRows(Array.isArray(rows) ? rows : []);
+    let finalRows = Array.isArray(rows) ? rows : [];
 
     if (status === "Overdue") {
-      rows = rows.filter(r => {
-        const due = r.dueDate ? new Date(r.dueDate) : null;
-        const lower = String(r.status || "").toLowerCase();
-        return due && !isNaN(due.getTime()) &&
-          due < new Date() &&
-          lower !== "completed" &&
-          lower !== "cancelled";
-      });
+      finalRows = finalRows.filter(r => String(r.status || "").toLowerCase() === "overdue");
     }
 
-    allAdminTaskRows = rows;
+    allAdminTaskRows = finalRows;
     renderFilteredAdminTasks();
     showMessage("taskMsg", "");
   } catch (err) {
@@ -1448,24 +1251,21 @@ function renderFilteredAdminTasks() {
 }
 
 async function loadMyTasks() {
-  if (!currentUser || isAdminUser()) return;
+  if (!currentUser || currentUser.role !== "staff") return;
+
+  const staffId = findCurrentUserStaffId();
+  if (!staffId) {
+    showMessage("myTaskMsg", "Could not map your staff account.", "error");
+    return;
+  }
 
   showMessage("myTaskMsg", "Loading your tasks...");
 
   try {
-    const response = await apiFetch(`${API_URL}/Tasks?scope=my`);
+    const response = await fetch(`${API_URL}/Tasks/my/${staffId}`);
+    const rows = await response.json();
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("My tasks load failed:", errorText);
-      showMessage("myTaskMsg", "Failed to load your tasks.", "error");
-      return;
-    }
-
-    let rows = await safeReadJson(response);
-    rows = enrichTaskRows(Array.isArray(rows) ? rows : []);
-
-    allMyTaskRows = rows;
+    allMyTaskRows = Array.isArray(rows) ? rows : [];
     renderTaskSummaryCards(allMyTaskRows, "myTaskSummaryCards");
     renderTaskAlertBox(allMyTaskRows, "myTaskAlertBoxWrap", true);
     renderMyTasks(allMyTaskRows);
@@ -1503,7 +1303,7 @@ function getTaskActionButtons(taskId, status, options = {}) {
 
   let buttons = [];
 
-  if (lower === "open" || lower === "new") {
+  if (lower === "new") {
     buttons.push(`<button class="btn-secondary btn-small" onclick='updateTaskStatus(${taskId}, "In Progress")'>Start</button>`);
     buttons.push(`<button class="btn-danger btn-small" onclick='updateTaskStatus(${taskId}, "Cancelled")'>Cancel</button>`);
   } else if (lower === "in progress") {
@@ -1538,14 +1338,7 @@ function renderTasks(rows) {
   rows.forEach(r => {
     const tr = document.createElement("tr");
 
-    const due = r.dueDate ? new Date(r.dueDate) : null;
-    const lower = String(r.status || "").toLowerCase();
-    const isOverdue = due && !isNaN(due.getTime()) &&
-      due < new Date() &&
-      lower !== "completed" &&
-      lower !== "cancelled";
-
-    if (isOverdue || lower === "overdue") {
+    if (String(r.status || "").toLowerCase() === "overdue") {
       tr.classList.add("task-overdue-row");
     }
 
@@ -1557,18 +1350,18 @@ function renderTasks(rows) {
           <div class="small-note">${escapeHtml(r.description || "")}</div>
         </div>
       </td>
-      <td data-label="Assigned To">${escapeHtml(r.assignedToName || "")}</td>
+      <td data-label="Assigned To">${escapeHtml(r.assignedToName || r.assigned_to_name || "")}</td>
       <td data-label="Branch">${escapeHtml(r.branch || "")}</td>
       <td data-label="Priority">
         <span class="${getPriorityBadgeClass(r.priority)}">${escapeHtml(r.priority || "")}</span>
       </td>
       <td data-label="Due Date">${escapeHtml(formatTaskDate(r.dueDate || r.due_date))}</td>
       <td data-label="Status">
-        <span class="${getStatusBadgeClass(isOverdue ? "Overdue" : r.status)}">${escapeHtml(isOverdue ? "Overdue" : (r.status || ""))}</span>
+        <span class="${getStatusBadgeClass(r.status)}">${escapeHtml(r.status || "")}</span>
       </td>
       <td data-label="Actions">
         <div class="table-actions">
-          ${getTaskActionButtons(r.id, isOverdue ? "Overdue" : r.status, { includeEdit: true })}
+          ${getTaskActionButtons(r.id, r.status, { includeEdit: true })}
         </div>
       </td>
     `;
@@ -1591,14 +1384,7 @@ function renderMyTasks(rows) {
   rows.forEach(r => {
     const tr = document.createElement("tr");
 
-    const due = r.dueDate ? new Date(r.dueDate) : null;
-    const lower = String(r.status || "").toLowerCase();
-    const isOverdue = due && !isNaN(due.getTime()) &&
-      due < new Date() &&
-      lower !== "completed" &&
-      lower !== "cancelled";
-
-    if (isOverdue || lower === "overdue") {
+    if (String(r.status || "").toLowerCase() === "overdue") {
       tr.classList.add("task-overdue-row");
     }
 
@@ -1616,11 +1402,11 @@ function renderMyTasks(rows) {
       </td>
       <td data-label="Due Date">${escapeHtml(formatTaskDate(r.dueDate || r.due_date))}</td>
       <td data-label="Status">
-        <span class="${getStatusBadgeClass(isOverdue ? "Overdue" : r.status)}">${escapeHtml(isOverdue ? "Overdue" : (r.status || ""))}</span>
+        <span class="${getStatusBadgeClass(r.status)}">${escapeHtml(r.status || "")}</span>
       </td>
       <td data-label="Actions">
         <div class="table-actions">
-          ${getTaskActionButtons(r.id, isOverdue ? "Overdue" : r.status, { includeEdit: false })}
+          ${getTaskActionButtons(r.id, r.status, { includeEdit: false })}
         </div>
       </td>
     `;
@@ -1640,6 +1426,8 @@ async function createTask() {
 
   const assignedName = $("taskAssignValue").value.trim();
   const assignedStaff = findActiveStaffByName(assignedName);
+  const createdById = findCurrentUserStaffId();
+
   const branch = $("taskBranch").value;
   const priority = $("taskPriority").value;
   const dueDate = $("taskDue").value;
@@ -1654,13 +1442,22 @@ async function createTask() {
     return;
   }
 
+  if (!createdById) {
+    showMessage("taskMsg", "Current user mapping not found.", "error");
+    return;
+  }
+
   try {
-    const response = await apiFetch(`${API_URL}/Tasks`, {
+    const response = await fetch(`${API_URL}/Tasks`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         title,
         description,
         assignedTo: assignedStaff.id,
+        createdBy: createdById,
         branch,
         priority,
         dueDate,
@@ -1668,10 +1465,10 @@ async function createTask() {
       })
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!response.ok || !res || !res.ok) {
-      showMessage("taskMsg", (res && res.message) || "Failed to create task.", "error");
+    if (!res.ok) {
+      showMessage("taskMsg", res.message || "Failed to create task.", "error");
       return;
     }
 
@@ -1689,34 +1486,37 @@ async function createTask() {
   }
 }
 
-async function updateTaskStatus(taskId, status) {
+async function updateTaskStatus(rowNumber, status) {
   try {
-    const response = await apiFetch(`${API_URL}/Tasks/${taskId}/status`, {
+    const response = await fetch(`${API_URL}/Tasks/${rowNumber}/status`, {
       method: "PATCH",
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
-        status
+        status: status
       })
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!response.ok || !res || !res.ok) {
-      showMessage("taskMsg", (res && res.message) || "Failed to update task.", "error");
-      showMessage("myTaskMsg", (res && res.message) || "Failed to update task.", "error");
+    if (!res.ok) {
+      showMessage("taskMsg", res.message || "Failed to update task.", "error");
+      showMessage("myTaskMsg", res.message || "Failed to update task.", "error");
       return;
     }
 
     showMessage("taskMsg", "Task updated successfully.", "success");
     showMessage("myTaskMsg", "Task updated successfully.", "success");
 
-    if (isAdminUser()) {
+    if (currentUser && currentUser.role === "admin") {
       await loadTasks();
     } else {
       await loadMyTasks();
     }
 
-    if (currentOpenTaskId === taskId) {
-      await openTaskDetails(taskId);
+    if (currentOpenTaskId === rowNumber) {
+      await openTaskDetails(rowNumber);
     }
   } catch (err) {
     console.error(err);
@@ -1729,26 +1529,15 @@ async function openTaskDetails(taskId) {
   currentOpenTaskId = taskId;
 
   try {
-    const response = await apiFetch(`${API_URL}/Tasks/${taskId}`);
+    const [taskResponse, activityResponse] = await Promise.all([
+      fetch(`${API_URL}/Tasks/${taskId}`),
+      fetch(`${API_URL}/Tasks/${taskId}/activity`)
+    ]);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Task details load failed:", errorText);
-      alert("Could not load task details.");
-      return;
-    }
+    const task = await taskResponse.json();
+    const activityRows = await activityResponse.json();
 
-    const res = await safeReadJson(response);
-
-    if (!res || !res.ok || !res.task) {
-      alert((res && res.message) || "Could not load task details.");
-      return;
-    }
-
-    const task = enrichTaskRows([res.task])[0];
-    const logs = enrichTaskLogs(Array.isArray(res.logs) ? res.logs : []);
-
-    renderTaskDetailsModal(task, logs);
+    renderTaskDetailsModal(task, Array.isArray(activityRows) ? activityRows : []);
   } catch (err) {
     console.error(err);
     alert("Could not load task details.");
@@ -1819,27 +1608,8 @@ function getStaffOptionsHtml(selectedId) {
 
 async function openEditTaskFromDetails(taskId) {
   try {
-    if (!activeStaffList.length && isAdminUser()) {
-      await loadActiveStaff();
-    }
-
-    const response = await apiFetch(`${API_URL}/Tasks/${taskId}`);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Open edit task failed:", errorText);
-      alert("Could not open edit task.");
-      return;
-    }
-
-    const res = await safeReadJson(response);
-
-    if (!res || !res.ok || !res.task) {
-      alert((res && res.message) || "Could not open edit task.");
-      return;
-    }
-
-    const task = res.task;
+    const response = await fetch(`${API_URL}/Tasks/${taskId}`);
+    const task = await response.json();
 
     openModal(`
       <h3>Edit Task</h3>
@@ -1891,7 +1661,7 @@ async function openEditTaskFromDetails(taskId) {
         <div class="form-group">
           <label>Status</label>
           <select id="editTaskStatus">
-            <option value="Open" ${task.status === "Open" ? "selected" : ""}>Open</option>
+            <option value="New" ${task.status === "New" ? "selected" : ""}>New</option>
             <option value="In Progress" ${task.status === "In Progress" ? "selected" : ""}>In Progress</option>
             <option value="Waiting" ${task.status === "Waiting" ? "selected" : ""}>Waiting</option>
             <option value="Completed" ${task.status === "Completed" ? "selected" : ""}>Completed</option>
@@ -1932,8 +1702,11 @@ async function saveTaskEdit(taskId) {
   }
 
   try {
-    const response = await apiFetch(`${API_URL}/Tasks/${taskId}`, {
+    const response = await fetch(`${API_URL}/Tasks/${taskId}`, {
       method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         title,
         description,
@@ -1946,14 +1719,14 @@ async function saveTaskEdit(taskId) {
       })
     });
 
-    const res = await safeReadJson(response);
+    const res = await response.json();
 
-    if (!response.ok || !res || !res.ok) {
-      alert((res && res.message) || "Failed to update task.");
+    if (!res.ok) {
+      alert(res.message || "Failed to update task.");
       return;
     }
 
-    if (isAdminUser()) {
+    if (currentUser && currentUser.role === "admin") {
       await loadTasks();
     } else {
       await loadMyTasks();
@@ -1970,19 +1743,11 @@ async function saveTaskEdit(taskId) {
 
 async function downloadMonthlyPdf() {
   try {
-    const response = await apiFetch(`${API_URL}/Reports/monthly`);
+    const response = await fetch(`${API_URL}/Reports/monthly?staff=${encodeURIComponent(currentUser.staff_name)}`);
+    const res = await response.json();
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error("Monthly report failed:", text);
-      alert("Could not generate report.");
-      return;
-    }
-
-    const res = await safeReadJson(response);
-
-    if (!res || !res.ok) {
-      alert((res && res.message) || "Could not generate report.");
+    if (!res.ok) {
+      alert(res.message || "Could not generate report.");
       return;
     }
 
@@ -2009,13 +1774,13 @@ async function downloadMonthlyPdf() {
     doc.text(`Total Gross: AED ${Number(res.total_gross || 0).toFixed(2)}`, 40, 149);
 
     const tableBody = res.rows.map(r => [
-      r.type || "Submission",
-      r.date || "",
-      r.file || "",
+      r.type,
+      r.date,
+      r.file,
       r.patient || "-",
-      r.treatment || "",
-      `AED ${Number(r.gross || 0).toFixed(2)}`,
-      r.timestamp || ""
+      r.treatment,
+      `AED ${Number(r.gross).toFixed(2)}`,
+      r.timestamp
     ]);
 
     doc.autoTable({
@@ -2047,8 +1812,6 @@ async function downloadMonthlyPdf() {
 }
 
 function openModal(html) {
-  if (!$("modalHost")) return;
-
   $("modalHost").classList.remove("hidden");
   $("modalHost").innerHTML = `
     <div class="modal-backdrop">
@@ -2060,12 +1823,11 @@ function openModal(html) {
 }
 
 function closeModal() {
-  if (!$("modalHost")) return;
-
   $("modalHost").classList.add("hidden");
   $("modalHost").innerHTML = "";
   currentOpenTaskId = null;
 }
+
 
 function loadLogoAsPngDataUrl(path) {
   return fetch(path)
