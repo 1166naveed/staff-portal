@@ -713,7 +713,10 @@ function renderSalesTable(rows) {
 
     tr.innerHTML = `
       <td data-label="Select"><input type="checkbox" class="sale-check" data-index="${index}"></td>
-      <td data-label="File no">${escapeHtml(row.fileNo || "")}</td>
+      <td data-label="File no">
+        <div>${escapeHtml(row.fileNo || "")}</div>
+        <div class="small-note">Staff: ${escapeHtml(currentUser?.staff_name || "")}</div>
+      </td>
       <td data-label="Patient">${escapeHtml(row.patient || "")}</td>
       <td data-label="Treatment">${escapeHtml(row.treatment || "")}</td>
       <td data-label="Gross">AED ${Number(row.gross || 0).toFixed(2)}</td>
