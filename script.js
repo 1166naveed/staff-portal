@@ -31,6 +31,7 @@ async function apiFetch(url, options = {}) {
   }
 
   return fetch(url, {
+    cache: "no-store",
     ...options,
     headers
   });
@@ -140,6 +141,87 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function getTodayInputDate() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getDubaiTodayInputDate() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+}
+
+function getDateYmdInDubai(value) {
+  if (!value) return "";
+
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(d);
+}
+
+function formatTaskDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = d.toLocaleString("en-US", { month: "short" });
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+function formatTaskDateTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = d.toLocaleString("en-US", { month: "short" });
+  const year = d.getFullYear();
+  const time = d.toLocaleString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+
+  return `${day}-${month}-${year} ${time}`;
+}
+
+function formatDubaiDateTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+
+  const datePart = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Dubai",
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }).format(d);
+
+  const timePart = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Dubai",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  }).format(d);
+
+  return `${datePart} ${timePart}`;
 }
 
 async function loadActiveStaff() {
@@ -510,47 +592,11 @@ async function showLoggedInUI() {
     if ($("staffPage")) $("staffPage").classList.remove("hidden");
     if ($("adminPage")) $("adminPage").classList.add("hidden");
     if ($("staffWelcome")) $("staffWelcome").textContent = `Welcome, ${currentUser.staff_name}`;
-    if ($("staffDate")) $("staffDate").value = getTodayInputDate();
+    if ($("staffDate")) $("staffDate").value = getDubaiTodayInputDate();
 
     await loadTodaySubmissions();
     await loadMyTasks();
   }
-}
-
-function getTodayInputDate() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function formatTaskDate(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
-}
-
-function formatTaskDateTime(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const year = d.getFullYear();
-  const time = d.toLocaleString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true
-  });
-
-  return `${day}-${month}-${year} ${time}`;
 }
 
 function openChangePasswordModal() {
@@ -763,7 +809,7 @@ async function submitSelectedSales() {
     }
 
     if (successCount > 0 && failedCount === 0) {
-      showMessage("salesMsg", `${successCount} sale(s) submitted successfully.`, "success");
+      showMessage("salesMsg", `${successCount} sale(s) submitted successfully by ${currentUser.staff_name}.`, "success");
     } else if (successCount > 0 && failedCount > 0) {
       showMessage("salesMsg", `${successCount} sale(s) submitted, ${failedCount} failed. ${lastError}`, "error");
     } else {
@@ -794,23 +840,12 @@ async function loadTodaySubmissions() {
     }
 
     const rows = await safeReadJson(response);
-    const today = getTodayInputDate();
+    const todayDubai = getDubaiTodayInputDate();
 
     const finalRows = (Array.isArray(rows) ? rows : []).filter(r => {
       const rawDate = r.submittedAt || r.createdAt;
-      if (!rawDate) return false;
-
-      const d = new Date(rawDate);
-      if (isNaN(d.getTime())) return false;
-
-      const localDate =
-        d.getFullYear() +
-        "-" +
-        String(d.getMonth() + 1).padStart(2, "0") +
-        "-" +
-        String(d.getDate()).padStart(2, "0");
-
-      return localDate === today;
+      const submittedDubaiDate = getDateYmdInDubai(rawDate);
+      return submittedDubaiDate === todayDubai;
     });
 
     renderTodayTable(finalRows);
@@ -834,11 +869,20 @@ function renderTodayTable(rows) {
 
   rows.forEach(r => {
     const tr = document.createElement("tr");
+    const submittedBy = r.staffName || currentUser?.staff_name || "";
+    const submittedWhen = formatDubaiDateTime(r.submittedAt || r.createdAt);
+
     tr.innerHTML = `
-      <td data-label="Time">${escapeHtml(formatTaskDateTime(r.submittedAt))}</td>
+      <td data-label="Time">
+        <div>${escapeHtml(submittedWhen)}</div>
+        <div class="small-note">Submitted by ${escapeHtml(submittedBy)}</div>
+      </td>
       <td data-label="File no">${escapeHtml(r.fileNo || "")}</td>
       <td data-label="Patient">${escapeHtml(r.patient || "")}</td>
-      <td data-label="Treatment">${escapeHtml(r.treatment || "")}</td>
+      <td data-label="Treatment">
+        <div>${escapeHtml(r.treatment || "")}</div>
+        <div class="small-note">Sale date: ${escapeHtml(formatTaskDate(r.saleDate))}</div>
+      </td>
       <td data-label="Gross">AED ${Number(r.gross || 0).toFixed(2)}</td>
     `;
     body.appendChild(tr);
