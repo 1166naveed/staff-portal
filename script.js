@@ -872,14 +872,10 @@ function renderTodayTable(rows) {
 
   rows.forEach(r => {
     const tr = document.createElement("tr");
-    const submittedBy = r.staffName || currentUser?.staff_name || "";
     const submittedWhen = formatDubaiDateTime(r.submittedAt || r.createdAt);
 
     tr.innerHTML = `
-      <td data-label="Time">
-        <div>${escapeHtml(submittedWhen)}</div>
-        <div class="small-note">Submitted by ${escapeHtml(submittedBy)}</div>
-      </td>
+      <td data-label="Time">${escapeHtml(submittedWhen)}</td>
       <td data-label="File no">${escapeHtml(r.fileNo || "")}</td>
       <td data-label="Patient">${escapeHtml(r.patient || "")}</td>
       <td data-label="Treatment">
